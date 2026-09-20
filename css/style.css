@@ -1,0 +1,1659 @@
+/*
+ * style.css — everything the player reads, in the game's own materials.
+ *
+ * LOBBOTS looks like the yard the walkers came out of: dark riveted plate,
+ * hazard stripes on anything that is about to happen, and condensed uppercase
+ * stencilling. Nothing here is generic, because a menu that would look the
+ * same over a white page tells the player they are configuring software
+ * rather than playing something (hub CLAUDE.md §2). Three consequences run
+ * through the file:
+ *
+ *   THE FIELD SHOWS THROUGH. Every panel is translucent over a blur. The
+ *   canvas is the whole window and sits under all of this, so the hillside
+ *   you are about to shell is visible behind the shop you are shopping in.
+ *
+ *   PLAYER COLOUR IS DATA. js/ui.js writes the custom property --c onto a
+ *   row, a card or the HUD; every rule below reads var(--c) and no rule
+ *   names a team colour. Ten palettes, one stylesheet.
+ *
+ *   NO WEB FONTS, NO EMOJI. The headings are a condensed system stack with
+ *   a real fallback, the weapon icons are painted onto a canvas by ui.js,
+ *   and the currency mark is an inline SVG nut. An emoji is a font somebody
+ *   else chose, and it is a different picture on every platform.
+ *
+ * Two layout rules are load-bearing rather than decorative, both from hub §2:
+ * every label shares one gutter width so controls line up down the panel, and
+ * a group of equal choices is sized `flex: 1 1 0` so the equal options look
+ * equal. The landscape-phone block at the bottom is the third — see its own
+ * comment.
+ */
+
+/* ===================== palette and metrics ===================== */
+
+:root {
+  /* ARCHITECTURE §12: the renderer, the icons and the manifest share these. */
+  --plate: #15181e;
+  --panel: #1e232b;
+  --edge: #3a414d;
+  --text: #eef0f4;
+  --muted: #9aa3b2;
+  --hazard: #ffd23f;
+  --danger: #ff4b3e;
+  --ok: #4fd66b;
+  --coolant: #3fe0e0;
+
+  /* The player colour of whatever this element belongs to. ui.js overrides
+     it per row, per seat, per HUD; hazard is the house colour when nobody
+     owns the element. */
+  --c: var(--hazard);
+
+  --head: "Arial Narrow", "Helvetica Neue Condensed", "Roboto Condensed",
+    "Liberation Sans Narrow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  /* Comfortable for a finger; a tablet is the common case. */
+  --tap: 44px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--plate);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 14px;
+  -webkit-text-size-adjust: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* The battlefield. touch-action:none because js/input.js reads a drag here as
+   angle and power, and a browser that decides the same gesture is a scroll
+   takes the aim with it. */
+#field {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  background: #0f1626;
+  outline: none;
+}
+
+/*
+ * The overlay layer. Padded by the safe-area insets, which also pulls every
+ * absolutely positioned screen inside them: an absolute child is laid out
+ * against its container's PADDING box, so nothing below needs to know a notch
+ * exists.
+ */
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+}
+#ui > * {
+  pointer-events: auto;
+}
+
+/* ===================== type ===================== */
+
+h1,
+h2 {
+  margin: 0;
+  font-family: var(--head);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  line-height: 1;
+}
+h1 {
+  font-size: clamp(34px, 9vw, 54px);
+  color: var(--text);
+  /* The stencil: a hazard shadow under the letters, not around them. */
+  text-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.6),
+    0 0 26px rgba(255, 210, 63, 0.25);
+}
+h2 {
+  font-size: clamp(20px, 5vw, 27px);
+}
+
+.kicker {
+  margin: 0 0 3px;
+  color: var(--hazard);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+.tagline {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.blurb {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  min-height: 1.35em;
+}
+
+/* ===================== panels ===================== */
+
+/*
+ * One plate, riveted at the corners, with the field visible through it. The
+ * four radial gradients are the rivets; the linear one is the brushed metal.
+ */
+.panel {
+  position: relative;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 11px 11px, rgba(255, 255, 255, 0.17) 0 1.4px, transparent 2.3px),
+    radial-gradient(circle at calc(100% - 11px) 11px, rgba(255, 255, 255, 0.17) 0 1.4px, transparent 2.3px),
+    radial-gradient(circle at 11px calc(100% - 11px), rgba(255, 255, 255, 0.13) 0 1.4px, transparent 2.3px),
+    radial-gradient(circle at calc(100% - 11px) calc(100% - 11px), rgba(255, 255, 255, 0.13) 0 1.4px, transparent 2.3px),
+    linear-gradient(168deg, rgba(46, 53, 65, 0.88), rgba(24, 28, 35, 0.93) 55%, rgba(17, 19, 24, 0.95));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 22px 60px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(9px) saturate(1.1);
+  -webkit-backdrop-filter: blur(9px) saturate(1.1);
+}
+
+/* The hazard band along the top of every panel. Decorative and aria-hidden. */
+.plate-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 6px;
+  border-radius: 13px 13px 0 0;
+  background: repeating-linear-gradient(
+    115deg,
+    var(--hazard) 0 13px,
+    #191d24 13px 26px
+  );
+  opacity: 0.85;
+}
+
+/*
+ * Screens are centred plates. They are a flex column whose ONE scrolling
+ * child is the list inside them (the roster, the shop rows, the standings):
+ * the panel itself never grows past the viewport, so the way out is never
+ * the thing that falls off the bottom.
+ */
+.screen {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(600px, calc(100% - 20px));
+  max-height: calc(100% - 20px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 18px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.screen-head {
+  text-align: center;
+}
+.screen-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A list that scrolls inside the panel rather than stretching it. */
+.rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 2px;
+}
+.rows::-webkit-scrollbar,
+#seats::-webkit-scrollbar,
+#weapons::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.rows::-webkit-scrollbar-thumb,
+#seats::-webkit-scrollbar-thumb,
+#weapons::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border-radius: 8px;
+}
+
+/* ===================== controls ===================== */
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--hazard);
+  outline-offset: 3px;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* The big one. A stamped hazard plate with a hard shadow under it, so it
+   physically depresses when pressed. */
+.primary {
+  width: 100%;
+  min-height: 54px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  color: #15181e;
+  font-family: var(--head);
+  font-size: 20px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  box-shadow:
+    0 5px 0 #8a6712,
+    0 14px 28px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 0.06s,
+    box-shadow 0.06s,
+    filter 0.15s;
+}
+.primary:hover {
+  filter: brightness(1.06);
+}
+.primary:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #8a6712;
+}
+
+.ghost {
+  min-height: var(--tap);
+  padding: 8px 14px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: rgba(21, 24, 30, 0.6);
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.ghost:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+/*
+ * A cluster of quiet buttons — quit, exit — capped so that when the others
+ * are conditionally hidden the last survivor does not stretch across the
+ * whole panel (hub §2).
+ */
+.menu-tools {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+}
+.menu-tools > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* One gutter for every row, so every control starts at the same x. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.label {
+  flex: 0 0 72px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/*
+ * Segmented rows: real buttons where exactly one carries aria-pressed. Never
+ * a <select> — an OS dropdown belongs to no game — and `flex: 1 1 0` rather
+ * than `1 1 auto`, so "Mayhem" and "Quick" come out the same size instead of
+ * telling the player the short one matters less.
+ */
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 6px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  background: rgba(21, 24, 30, 0.72);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.15;
+  transition:
+    background 0.14s,
+    box-shadow 0.14s,
+    color 0.14s;
+}
+.seg button:hover {
+  background: rgba(58, 65, 77, 0.8);
+}
+.seg button[aria-pressed="true"] {
+  background: linear-gradient(180deg, #ffdf63, #e7b528);
+  border-color: transparent;
+  color: #15181e;
+  font-weight: 800;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+    0 4px 16px rgba(255, 210, 63, 0.22);
+}
+.seg button:disabled {
+  opacity: 0.35;
+}
+
+/* Seven personalities want to wrap and still look like seven equals, which a
+   wrapping flex row cannot do and an auto-fit grid does exactly. */
+.seg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px;
+}
+.seg-grid button {
+  min-height: 38px;
+  font-size: 12px;
+}
+
+/* Round pills: the HUD's − / + and the roster's fewer / more. */
+.pill {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 10px;
+  border: 1px solid var(--edge);
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(58, 65, 77, 0.85), rgba(24, 28, 35, 0.9));
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+.pill:hover {
+  border-color: var(--hazard);
+  color: var(--hazard);
+}
+.pill:active {
+  transform: translateY(1px);
+}
+.pill:disabled {
+  opacity: 0.3;
+}
+
+/* Text and number fields. A bare input is another OS control; this one is a
+   slot milled into the plate. */
+.field {
+  min-height: var(--tap);
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  background: rgba(10, 12, 16, 0.75);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+.field::placeholder {
+  color: rgba(154, 163, 178, 0.6);
+}
+.field.num {
+  width: 100px;
+  flex: 0 0 auto;
+  -moz-appearance: textfield;
+  appearance: textfield;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.field.num::-webkit-outer-spin-button,
+.field.num::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/*
+ * The volume slider. Both vendor pseudo-elements are written out because
+ * there is no shared selector for them: the track is a cut channel, the thumb
+ * a hazard-yellow shuttle.
+ */
+.slider {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  min-width: 0;
+}
+.slider input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.slider input[type="range"]:focus-visible {
+  outline: 2px solid var(--hazard);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+.slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #0c0e12, #232833);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.slider input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #0c0e12, #232833);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 26px;
+  margin-top: -10px;
+  border-radius: 5px;
+  border: 1px solid #8a6712;
+  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.slider input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 26px;
+  border-radius: 5px;
+  border: 1px solid #8a6712;
+  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.slider output {
+  flex: 0 0 44px;
+  text-align: right;
+  font-weight: 800;
+  color: var(--hazard);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The colour chip a player wears, wherever they are named. */
+.swatch {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  background: var(--c);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(255, 255, 255, 0.12);
+}
+
+/* ===================== setup ===================== */
+
+#logo {
+  /* Slightly loosened, because condensed caps at this size read as one word
+     otherwise. */
+  letter-spacing: 0.12em;
+}
+
+.setup-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#roster {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+}
+.roster-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.roster-head .label {
+  flex: 0 0 auto;
+}
+#seat-count {
+  font-family: var(--head);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--hazard);
+  font-variant-numeric: tabular-nums;
+}
+.seat-tools {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* The roster scrolls inside its own box: ten seat cards is more than any
+   phone has, and DEPLOY must never be the thing that goes off the bottom. */
+#seats {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: min(42vh, 330px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.seat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--c);
+  border-radius: 10px;
+  background: rgba(30, 35, 43, 0.55);
+}
+.seat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatch-btn {
+  flex: 0 0 auto;
+  width: var(--tap);
+  height: var(--tap);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: rgba(10, 12, 16, 0.7);
+}
+.swatch-btn:hover {
+  border-color: var(--c);
+}
+.swatch-btn .swatch {
+  width: 20px;
+  height: 20px;
+}
+.seat-name {
+  flex: 1 1 70px;
+}
+.seg-kind {
+  flex: 0 0 120px;
+}
+.seg-kind button {
+  min-height: var(--tap);
+  font-size: 12px;
+  padding: 4px 6px;
+}
+/* The seven bot styles, fenced off from the seat's own header above them. */
+.seg-pers {
+  padding-top: 6px;
+  border-top: 1px dashed rgba(58, 65, 77, 0.9);
+}
+.pers-blurb {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+/* UPDATE READY. Owned by js/update.js; it only ever toggles [hidden]. */
+#update {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px dashed var(--hazard);
+  border-radius: 10px;
+  background: rgba(255, 210, 63, 0.1);
+  color: var(--text);
+  text-align: center;
+}
+#update:hover {
+  background: rgba(255, 210, 63, 0.18);
+}
+.update-title {
+  display: block;
+  font-family: var(--head);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hazard);
+}
+.update-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+#build {
+  margin: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: rgba(154, 163, 178, 0.6);
+}
+
+/* ===================== HUD ===================== */
+
+/*
+ * Two strips, and they are pointer-transparent except where there is a
+ * control: the field underneath is what a drag aims with, so the HUD gives
+ * back every pixel it is not actually using.
+ */
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#hud-top,
+#hud-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 10px;
+  pointer-events: none;
+}
+/* Only the bottom strip holds controls; nothing in the top one is tappable,
+   so the whole of it stays a place you can start a drag. */
+#hud-bottom > * {
+  pointer-events: auto;
+}
+
+#hud-top {
+  top: 0;
+  /* Room on the right for #corner, which floats above this strip. */
+  padding: 8px 106px 10px 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: linear-gradient(180deg, rgba(15, 17, 22, 0.85), rgba(15, 17, 22, 0));
+}
+
+#turn-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 9px;
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--c);
+  border-radius: 9px;
+  background: rgba(21, 24, 30, 0.78);
+  max-width: 46vw;
+}
+#turn-name {
+  font-family: var(--head);
+  font-size: 17px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#turn-think {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  animation: think 1.6s ease-in-out infinite;
+}
+@keyframes think {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+#hp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+#hp-bar {
+  position: relative;
+  width: 116px;
+  height: 15px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: rgba(10, 12, 16, 0.85);
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+#hp-fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  background: linear-gradient(180deg, #86e79a, var(--ok));
+  transition: width 0.2s linear;
+}
+#hp-bar.mid #hp-fill {
+  background: linear-gradient(180deg, #ffe27a, var(--hazard));
+}
+#hp-bar.low #hp-fill {
+  background: linear-gradient(180deg, #ff7a70, var(--danger));
+}
+#hp-shield {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 4px;
+  background: var(--coolant);
+  box-shadow: 0 0 8px rgba(63, 224, 224, 0.7);
+}
+#hp-text {
+  font-family: var(--head);
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+}
+
+#round-text {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The wind: number, then an arrow as long and as bright as the wind is
+   strong, pointing where it blows. ui.js flips the row for a westerly so the
+   head is always on the outside. */
+#wind {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  background: rgba(21, 24, 30, 0.7);
+}
+#wind.west {
+  flex-direction: row-reverse;
+}
+#wind-num {
+  font-family: var(--head);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+#wind.calm #wind-num {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+#wind-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--hazard);
+}
+#wind.west #wind-arrow {
+  flex-direction: row-reverse;
+}
+#wind.calm #wind-arrow {
+  display: none;
+}
+#wind-bar {
+  display: block;
+  height: 3px;
+  width: 10px;
+  border-radius: 2px;
+  background: currentColor;
+}
+#wind-head {
+  font-size: 12px;
+  line-height: 1;
+}
+
+#shot-timer {
+  margin-left: auto;
+  font-family: var(--head);
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--hazard);
+}
+#shot-timer.urgent {
+  color: var(--danger);
+  animation: urgent 0.8s steps(2) infinite;
+}
+@keyframes urgent {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---- the bottom strip: angle, power, loadout, FIRE ---- */
+
+#hud-bottom {
+  bottom: 0;
+  padding: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  background: linear-gradient(0deg, rgba(15, 17, 22, 0.9), rgba(15, 17, 22, 0));
+  transition: opacity 0.18s;
+}
+#hud-bottom.locked {
+  opacity: 0.42;
+}
+
+.dials {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+  pointer-events: auto;
+}
+.dial {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: rgba(21, 24, 30, 0.8);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.dial-read {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  min-width: 58px;
+  line-height: 1;
+}
+.dial-read b {
+  font-family: var(--head);
+  font-size: 23px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.dial-unit {
+  font-size: 13px;
+  color: var(--muted);
+}
+.dial-label {
+  flex: 0 0 100%;
+  margin-top: 4px;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#weapons {
+  flex: 1 1 240px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 2px;
+  pointer-events: auto;
+}
+.weapon {
+  flex: 0 0 66px;
+  width: 66px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 3px 4px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: rgba(21, 24, 30, 0.8);
+}
+.weapon .wicon {
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+}
+.w-name {
+  max-width: 100%;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.w-ammo {
+  font-family: var(--head);
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.weapon[aria-pressed="true"] {
+  border-color: var(--hazard);
+  background: rgba(255, 210, 63, 0.16);
+  box-shadow: inset 0 0 0 1px var(--hazard);
+}
+.weapon[aria-pressed="true"] .w-name {
+  color: var(--text);
+}
+
+#fire-btn {
+  flex: 0 0 auto;
+  min-width: 118px;
+  min-height: 62px;
+  margin-left: auto;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  color: #15181e;
+  font-family: var(--head);
+  font-size: 24px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  box-shadow:
+    0 5px 0 #8a6712,
+    0 12px 26px rgba(0, 0, 0, 0.5);
+  transition:
+    transform 0.06s,
+    box-shadow 0.06s;
+}
+#fire-btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #8a6712;
+}
+#fire-btn:disabled {
+  filter: grayscale(0.7);
+}
+
+/* ===================== scoreboard ===================== */
+
+.sb-row {
+  display: grid;
+  grid-template-columns: minmax(118px, 1fr) minmax(0, 1.3fr) minmax(0, 1.1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--c);
+  border-radius: 9px;
+  background: rgba(30, 35, 43, 0.6);
+}
+.sb-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sb-who b {
+  font-size: 14px;
+}
+.sb-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sb-money {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.earned {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--head);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--hazard);
+}
+.earned .plus {
+  color: var(--ok);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.chip {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(154, 163, 178, 0.14);
+  color: var(--muted);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 42px;
+}
+.cell b {
+  font-family: var(--head);
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.cell i {
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.tag {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.tag.standing {
+  color: var(--ok);
+  background: rgba(79, 214, 107, 0.14);
+}
+.tag.wrecked {
+  color: var(--danger);
+  background: rgba(255, 75, 62, 0.16);
+}
+.tag.won {
+  color: var(--hazard);
+  background: rgba(255, 210, 63, 0.16);
+}
+
+/* The currency mark and its number. */
+.bolts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.bolt {
+  width: 12px;
+  height: 12px;
+  fill: var(--hazard);
+  flex: 0 0 auto;
+}
+.bolts b {
+  font-variant-numeric: tabular-nums;
+}
+.bolts i {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ===================== the parts counter ===================== */
+
+.shop-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+#shop-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#shop-title .swatch {
+  width: 18px;
+  height: 18px;
+}
+#shop-money {
+  font-family: var(--head);
+  font-size: 22px;
+  font-weight: 800;
+}
+#shop-money .bolt {
+  width: 16px;
+  height: 16px;
+}
+.bot-line {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--hazard);
+  min-height: 1.3em;
+}
+
+.shop-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  background: rgba(30, 35, 43, 0.6);
+}
+.shop-row .wicon {
+  width: 38px;
+  height: 38px;
+}
+.shop-row.held {
+  border-color: rgba(255, 210, 63, 0.45);
+}
+.shop-row.poor {
+  opacity: 0.55;
+}
+.sr-main {
+  min-width: 0;
+}
+.sr-name {
+  display: block;
+  font-size: 14px;
+}
+.sr-desc {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.sr-buy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 104px;
+}
+.sr-buy .bolts b {
+  font-family: var(--head);
+  font-size: 16px;
+  font-weight: 800;
+}
+.sr-pack,
+.sr-owned {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.sr-owned {
+  color: var(--hazard);
+}
+.buy {
+  margin-top: 3px;
+  min-height: 38px;
+  padding: 4px 16px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  color: #15181e;
+  font-family: var(--head);
+  font-size: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.buy:disabled {
+  background: none;
+  border: 1px solid var(--edge);
+  color: var(--muted);
+}
+
+/* ===================== match over ===================== */
+
+.mo-row {
+  display: grid;
+  grid-template-columns: 28px 16px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--c);
+  border-radius: 9px;
+  background: rgba(30, 35, 43, 0.6);
+}
+.mo-row.first {
+  border-color: var(--hazard);
+  box-shadow: 0 0 22px rgba(255, 210, 63, 0.18);
+}
+.place {
+  font-family: var(--head);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--muted);
+  text-align: center;
+}
+.mo-row.first .place {
+  color: var(--hazard);
+}
+.mo-name {
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mo-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ===================== pause ===================== */
+
+.pause-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ===================== the corner ===================== */
+
+#corner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  z-index: 6;
+}
+.icon-button {
+  width: var(--tap);
+  height: var(--tap);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--edge);
+  border-radius: 11px;
+  background: rgba(21, 24, 30, 0.75);
+  color: var(--text);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.icon-button:hover {
+  border-color: var(--hazard);
+  color: var(--hazard);
+}
+.icon-button svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* aria-pressed picks the picture, so the icon and the label can never
+   disagree about which way the toggle is pointing. */
+.icon-button .icon-on {
+  display: none;
+}
+.icon-button[aria-pressed="true"] .icon-off {
+  display: none;
+}
+.icon-button[aria-pressed="true"] .icon-on {
+  display: inline;
+}
+.icon-button[aria-pressed="true"] {
+  border-color: var(--hazard);
+  color: var(--hazard);
+}
+
+/* ===================== the callout ===================== */
+
+#callout {
+  position: absolute;
+  left: 50%;
+  top: 21%;
+  transform: translate(-50%, -8px);
+  min-width: min(300px, 80vw);
+  max-width: min(520px, 92vw);
+  padding: 12px 24px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: rgba(17, 19, 24, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
+}
+#callout.up {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+#callout-title {
+  margin: 0;
+  font-family: var(--head);
+  font-size: clamp(20px, 5.5vw, 30px);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+#callout-sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ===================== the crash bar ===================== */
+
+#crash {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  padding: 10px 14px calc(10px + var(--safe-b));
+  background: var(--danger);
+  color: #1a0805;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* ===================== narrow phones ===================== */
+
+@media (max-width: 460px) {
+  .screen {
+    width: calc(100% - 16px);
+    max-height: calc(100% - 16px);
+    padding: 16px 12px 12px;
+    gap: 8px;
+  }
+  .label {
+    flex-basis: 60px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+  .seg button {
+    font-size: 12px;
+    padding: 6px 6px;
+  }
+  .seg-kind {
+    flex-basis: 104px;
+  }
+  .primary {
+    min-height: 50px;
+    font-size: 18px;
+  }
+
+  /* The loadout moves above the dials: it is the widest thing down here and
+     the one that wants a full row to itself. */
+  #weapons {
+    order: -1;
+    flex: 1 1 100%;
+  }
+  #hud-bottom {
+    padding: 8px;
+    gap: 8px;
+  }
+  #fire-btn {
+    min-width: 96px;
+    min-height: 58px;
+    font-size: 20px;
+  }
+  .dial-read {
+    min-width: 48px;
+  }
+  .dial-read b {
+    font-size: 20px;
+  }
+  #hud-top {
+    padding: 6px 100px 8px 8px;
+    gap: 7px;
+  }
+  #hp-bar {
+    width: 84px;
+  }
+  #turn-chip {
+    max-width: 40vw;
+  }
+
+  /* Three columns of statistics do not fit across a phone; one card each. */
+  .sb-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .sb-money {
+    align-items: flex-start;
+  }
+  .chips {
+    justify-content: flex-start;
+  }
+  .mo-row {
+    grid-template-columns: 24px 14px minmax(0, 1fr);
+  }
+  .mo-stats {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .shop-row {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+  .shop-row .wicon {
+    width: 34px;
+    height: 34px;
+  }
+  .sr-buy {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .buy {
+    margin-top: 0;
+  }
+}
+
+/* ================ landscape phones: the panels turn sideways ================
+   A phone on its side is 300–430px tall and a browser toolbar can take fifty
+   of those, so a column that fits a portrait phone with room to spare runs
+   off the bottom sideways — and what goes off the bottom is whatever is last
+   in the column, which here is DEPLOY and the way back to the arcade. What a
+   sideways phone has instead is width, so the two tall screens become
+   two-column grids laid over the existing markup BY AREA: nothing moves in
+   index.html and portrait is untouched. maxgear is the reference and this is
+   its shape. A tablet is taller than 500px whichever way up and keeps the
+   stacked layout.
+
+   The last thirty pixels are bought back from control heights, and they stop
+   at 38: this query fires on a phone, where a finger is still the pointer.
+   .screen keeps `overflow: auto` behind all of it as a safety net on very
+   short viewports — but a safety net is not a plan. */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --tap: 38px;
+  }
+  .screen {
+    width: min(780px, calc(100% - 16px));
+    max-height: calc(100% - 12px);
+    padding: 12px 14px 10px;
+    gap: 8px;
+  }
+  h1 {
+    font-size: clamp(22px, 5vh, 32px);
+  }
+  h2 {
+    font-size: clamp(16px, 4vh, 22px);
+  }
+  .tagline {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .primary {
+    min-height: 44px;
+    font-size: 17px;
+  }
+
+  /* ---- Setup: title, rules and DEPLOY down the left; the roster takes the
+       whole right column and scrolls inside itself ---- */
+  #setup {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-areas:
+      "head roster"
+      "opts roster"
+      "go   roster"
+      "foot roster";
+    align-content: center;
+    align-content: safe center;
+    gap: 8px 16px;
+  }
+  #setup .screen-head {
+    grid-area: head;
+  }
+  #setup .setup-opts {
+    grid-area: opts;
+  }
+  #setup #roster {
+    grid-area: roster;
+    min-height: 0;
+  }
+  #setup #deploy {
+    grid-area: go;
+    align-self: center;
+  }
+  #setup .screen-foot {
+    grid-area: foot;
+  }
+  #seats {
+    flex: 1 1 auto;
+    max-height: none;
+    min-height: 0;
+  }
+  .seg-grid {
+    grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  }
+  .seg-grid button {
+    min-height: 34px;
+    font-size: 11px;
+  }
+
+  /* ---- Pause: the panel is short enough that standing the volume beside the
+       buttons is the whole fix ---- */
+  #pause {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "head opts"
+      "go   opts"
+      "tools opts";
+    align-content: center;
+    align-content: safe center;
+    align-items: center;
+    gap: 8px 18px;
+  }
+  #pause .screen-head {
+    grid-area: head;
+  }
+  #pause .pause-opts {
+    grid-area: opts;
+  }
+  #pause #resume-btn {
+    grid-area: go;
+  }
+  #pause .menu-tools {
+    grid-area: tools;
+  }
+
+  /* ---- The HUD gives the field back as much height as it can ---- */
+  #hud-bottom {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+  #fire-btn {
+    min-height: 52px;
+    min-width: 104px;
+    font-size: 20px;
+  }
+  .weapon {
+    flex-basis: 58px;
+    width: 58px;
+  }
+  .weapon .wicon {
+    width: 26px;
+    height: 26px;
+  }
+  .dial-read b {
+    font-size: 19px;
+  }
+  #hud-top {
+    padding: 5px 100px 8px 8px;
+  }
+  #callout {
+    top: 14%;
+    padding: 8px 18px;
+  }
+}
+
+/* A player who has asked for less movement gets less movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

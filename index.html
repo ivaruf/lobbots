@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Lobbots</title>
+    <meta
+      name="description"
+      content="Turn-based mech artillery. Industrial walkers planted on a hillside take turns picking a weapon, an angle and a power; the wind bends the shot, the craters change the ground, and the last one standing takes the round."
+    />
+    <meta name="theme-color" content="#15181e" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+
+    <!--
+      The PWA layer. Every path here is RELATIVE, so the game works from
+      /tankwars/ (the working name of the repo), from /lobbots/ once the
+      folder is renamed, and from a domain root, with no edits. The arcade
+      reads this manifest to build the cabinet: it splits `name` on the
+      em-dash into a title and a tagline, so that one field does two jobs.
+    -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="shortcut icon" type="image/png" href="icons/icon-192.png" />
+
+    <link rel="stylesheet" href="css/style.css" />
+
+    <!--
+      What quitting means here: back to the arcade when the arcade is what
+      framed us, closing the window when we are installed, and an honest note
+      when we are a tab no script may close. arcade/exit.js decides that and
+      draws nothing at all — every exit button on this page is ours, and
+      js/ui.js only shows them once window.ArcadeExit has actually turned up.
+
+      Classic and deferred on purpose: another repo's file inside a module
+      graph takes the whole game down with it when it 404s. And it is
+      EXPECTED to 404 sometimes — serve this directory on its own and "../"
+      cannot climb above the server root — which is what data-handled says to
+      the crash bar at the bottom of this file.
+    -->
+    <script src="../arcade/exit.js" defer data-handled="optional"></script>
+  </head>
+  <body>
+    <!--
+      One canvas, the whole battlefield, letterboxed by js/render/render.js;
+      every screen below floats over it as DOM. The panels are deliberately
+      translucent so the hillside shows through whatever you are reading.
+    -->
+    <canvas id="field" aria-label="Lobbots battlefield"></canvas>
+
+    <div id="ui">
+      <!-- ============================ SETUP ============================
+           The only screen that is not `hidden` at parse time, because the
+           UPDATE READY button lives inside it: js/update.js must be able to
+           offer a waiting build even on a session where js/main.js never
+           boots. js/ui.js fills the empty containers here (preset pills,
+           rounds pills, the seat cards) from js/config.js so the labels and
+           the code cannot drift apart. -->
+      <section id="setup" class="screen panel" aria-labelledby="logo">
+        <div class="plate-strip" aria-hidden="true"></div>
+
+        <header class="screen-head">
+          <h1 id="logo">Lobbots</h1>
+          <p class="tagline">Big robots, bigger lobs.</p>
+        </header>
+
+        <div class="setup-opts">
+          <div class="row">
+            <span class="label" id="lbl-preset">Rules</span>
+            <div
+              class="seg"
+              data-seg="preset"
+              role="group"
+              aria-labelledby="lbl-preset"
+            ></div>
+          </div>
+          <p class="blurb" id="preset-blurb"></p>
+
+          <div class="row">
+            <span class="label" id="lbl-rounds">Rounds</span>
+            <div
+              class="seg"
+              data-seg="rounds"
+              role="group"
+              aria-labelledby="lbl-rounds"
+            ></div>
+          </div>
+          <div class="row" id="rounds-custom" hidden>
+            <label class="label" for="rounds-input">How many</label>
+            <input
+              id="rounds-input"
+              class="field num"
+              type="number"
+              min="1"
+              max="50"
+              step="1"
+              inputmode="numeric"
+              value="5"
+            />
+          </div>
+        </div>
+
+        <!-- The roster. #seats scrolls inside its own box rather than growing
+             the panel, so DEPLOY and the way out never leave the screen —
+             ten seats is a lot of card on a phone. -->
+        <div id="roster">
+          <div class="roster-head">
+            <span class="label" id="lbl-seats">Lobbots</span>
+            <span id="seat-count" class="count">4</span>
+            <div class="seat-tools" role="group" aria-labelledby="lbl-seats">
+              <button
+                type="button"
+                id="seat-less"
+                class="pill"
+                aria-label="One lobbot fewer"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                id="seat-more"
+                class="pill"
+                aria-label="One lobbot more"
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div id="seats"></div>
+        </div>
+
+        <button type="button" id="deploy" class="primary">Deploy</button>
+
+        <div class="screen-foot">
+          <!--
+            UPDATE READY. Hidden until a new service worker has installed and
+            is waiting; tapping it is the only thing in the game that posts
+            SKIP_WAITING. It sits inside #setup on purpose — this panel is
+            gone for the whole of a match, so no deploy can ever interrupt a
+            round. Owned end to end by js/update.js, which nothing imports.
+          -->
+          <button type="button" id="update" hidden>
+            <span class="update-title">New build ready</span>
+            <span class="update-sub">Tap to take it</span>
+          </button>
+          <div class="menu-tools">
+            <button type="button" id="exit-btn" class="ghost exit-btn" hidden>
+              Back to the arcade
+            </button>
+          </div>
+          <!-- Which build is actually serving this session, asked of the
+               service worker rather than baked into the HTML. -->
+          <p id="build" hidden></p>
+        </div>
+      </section>
+
+      <!-- ============================= HUD =============================
+           Two strips, not a panel: the battlefield has to stay readable
+           between them. js/ui.js rewrites only the values that changed on
+           each frame, and js/input.js speaks the same intents from the
+           keyboard and from a drag on the canvas. -->
+      <section id="hud" hidden>
+        <div id="hud-top">
+          <div id="turn-chip">
+            <i class="swatch" id="turn-swatch" aria-hidden="true"></i>
+            <span id="turn-name">—</span>
+            <span id="turn-think" hidden>thinking…</span>
+          </div>
+
+          <div id="hp" role="img" aria-label="Hull">
+            <div id="hp-bar">
+              <i id="hp-fill"></i>
+              <i id="hp-shield" hidden></i>
+            </div>
+            <span id="hp-text">100</span>
+          </div>
+
+          <div id="round-text">Round 1 / 5</div>
+
+          <!-- The wind: an arrow that points where it blows, as long and as
+               bright as it is strong, with the number the sim actually uses. -->
+          <div id="wind" role="img" aria-label="Wind calm">
+            <span id="wind-num">calm</span>
+            <span id="wind-arrow" aria-hidden="true">
+              <i id="wind-bar"></i>
+              <b id="wind-head">▶</b>
+            </span>
+          </div>
+
+          <div id="shot-timer" hidden>0</div>
+        </div>
+
+        <div id="hud-bottom">
+          <div class="dials">
+            <div class="dial">
+              <button
+                type="button"
+                class="pill step"
+                data-axis="angle"
+                data-dir="-1"
+                aria-label="Barrel down"
+              >
+                −
+              </button>
+              <span class="dial-read">
+                <b id="angle-val">45</b><span class="dial-unit">°</span>
+                <span class="dial-label">Angle</span>
+              </span>
+              <button
+                type="button"
+                class="pill step"
+                data-axis="angle"
+                data-dir="1"
+                aria-label="Barrel up"
+              >
+                +
+              </button>
+            </div>
+
+            <div class="dial">
+              <button
+                type="button"
+                class="pill step"
+                data-axis="power"
+                data-dir="-1"
+                aria-label="Less power"
+              >
+                −
+              </button>
+              <span class="dial-read">
+                <b id="power-val">60</b>
+                <span class="dial-label">Power</span>
+              </span>
+              <button
+                type="button"
+                class="pill step"
+                data-axis="power"
+                data-dir="1"
+                aria-label="More power"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          <!-- One button per weapon in the current player's arsenal, built by
+               js/ui.js with a procedurally drawn icon. -->
+          <div id="weapons" role="group" aria-label="Loadout"></div>
+
+          <button type="button" id="fire-btn">Fire</button>
+        </div>
+      </section>
+
+      <!-- ========================= SCOREBOARD ========================= -->
+      <section
+        id="scoreboard"
+        class="screen panel"
+        hidden
+        aria-labelledby="sb-title"
+      >
+        <div class="plate-strip" aria-hidden="true"></div>
+        <header class="screen-head">
+          <p class="kicker">What that cost everyone</p>
+          <h2 id="sb-title">Round results</h2>
+        </header>
+        <div id="sb-rows" class="rows"></div>
+        <button type="button" id="sb-continue" class="primary">Continue</button>
+      </section>
+
+      <!-- ============================ SHOP ============================ -->
+      <section id="shop" class="screen panel" hidden aria-labelledby="shop-title">
+        <div class="plate-strip" aria-hidden="true"></div>
+        <header class="screen-head shop-head">
+          <p class="kicker">The parts counter</p>
+          <h2 id="shop-title">
+            <i class="swatch" id="shop-swatch" aria-hidden="true"></i>
+            <span id="shop-name">—</span>
+          </h2>
+          <p id="shop-status" class="blurb" hidden></p>
+          <div id="shop-money"></div>
+        </header>
+        <div id="shop-rows" class="rows"></div>
+        <p id="shop-bot" class="bot-line" hidden></p>
+        <button type="button" id="shop-done" class="primary">Done</button>
+      </section>
+
+      <!-- =========================== PAUSE ============================ -->
+      <section
+        id="pause"
+        class="screen panel"
+        hidden
+        tabindex="-1"
+        aria-labelledby="pause-title"
+      >
+        <div class="plate-strip" aria-hidden="true"></div>
+        <header class="screen-head">
+          <p class="kicker">Nothing moves until you say so</p>
+          <h2 id="pause-title">Paused</h2>
+        </header>
+
+        <div class="pause-opts">
+          <div class="row">
+            <label class="label" for="volume">Volume</label>
+            <div class="slider">
+              <input
+                type="range"
+                id="volume"
+                min="0"
+                max="100"
+                step="1"
+                value="80"
+              />
+              <output id="volume-out" for="volume">80</output>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" id="resume-btn" class="primary">Resume</button>
+        <div class="menu-tools">
+          <button type="button" id="quit-btn" class="ghost">Power down</button>
+          <button
+            type="button"
+            id="exit-btn-pause"
+            class="ghost exit-btn"
+            hidden
+          >
+            Back to the arcade
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================= MATCH OVER ========================= -->
+      <section
+        id="matchover"
+        class="screen panel"
+        hidden
+        aria-labelledby="mo-title"
+      >
+        <div class="plate-strip" aria-hidden="true"></div>
+        <header class="screen-head">
+          <p class="kicker">Final standings</p>
+          <h2 id="mo-title">Match over</h2>
+          <p id="mo-champ" class="blurb"></p>
+        </header>
+        <div id="mo-rows" class="rows"></div>
+        <button type="button" id="mo-again" class="primary">Again</button>
+        <div class="screen-foot">
+          <div class="menu-tools">
+            <button type="button" id="exit-btn-over" class="ghost exit-btn" hidden>
+              Back to the arcade
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- THE CORNER. Present on every screen, so the top right means the
+           same thing on the setup panel as it does mid-round. Both pills
+           start hidden: js/screen.js un-hides the fullscreen one only once
+           the browser has answered that it has element fullscreen at all
+           (iPhone Safari does not), and js/ui.js shows the pause pill only
+           while a round is actually running. -->
+      <div id="corner">
+        <button
+          type="button"
+          id="screen-toggle"
+          class="icon-button"
+          aria-pressed="false"
+          aria-label="Fullscreen"
+          title="Fullscreen"
+          hidden
+        >
+          <!-- Four corners pushing out, and the same four pulled in for the
+               pressed state. CSS shows one and hides the other. -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="icon-off" d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6" />
+            <path class="icon-on" d="M3 9h6V3m12 6h-6V3M9 15H3v6m12 0v-6h6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="pause-btn"
+          class="icon-button"
+          aria-label="Pause"
+          title="Pause"
+          hidden
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 5v14M15 5v14" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- The centred plate that announces a turn, a round or a purchase and
+           then gets out of the way. Deliberately NOT called "banner": every
+           game here shares ivaruf.github.io, and a blocker's generic cosmetic
+           rules are written against names like that without ever looking
+           inside the page (hub CLAUDE.md §2). It blocks nothing and it is
+           never in the way — pointer-events are off. -->
+      <div id="callout" hidden aria-live="polite">
+        <p id="callout-title"></p>
+        <p id="callout-sub"></p>
+      </div>
+    </div>
+
+    <!--
+      Crash bar. A module script reports its whole import graph through the
+      one <script> tag, so a failure here names js/main.js even when the file
+      that actually failed to load was one of its imports — say so in the
+      message, or the next reader goes and checks a file that is serving 200s.
+    -->
+    <div id="crash" role="alert" hidden></div>
+
+    <script>
+      // Surface load-time failures instead of a silent dark canvas.
+      (function () {
+        var bar = document.getElementById("crash");
+        function show(msg) {
+          bar.textContent = msg;
+          bar.hidden = false;
+        }
+        window.addEventListener(
+          "error",
+          function (e) {
+            var t = e.target;
+            // data-handled marks a script whose failure is already dealt
+            // with: ../arcade/exit.js says "optional" because it is another
+            // repo's file and is simply absent when this game is served on
+            // its own. Any non-empty value counts.
+            if (t && t.tagName === "SCRIPT" && t.dataset && t.dataset.handled)
+              return;
+            if (t && t.tagName === "SCRIPT") {
+              show(
+                "A script failed to load: " +
+                  t.src +
+                  " (if this is js/main.js, the real culprit may be one of its imports)",
+              );
+              return;
+            }
+            show("Something broke: " + (e.message || e.type));
+          },
+          true,
+        );
+        window.addEventListener("unhandledrejection", function (e) {
+          show(
+            "Something broke: " +
+              (e.reason && e.reason.message ? e.reason.message : e.reason),
+          );
+        });
+      })();
+    </script>
+
+    <!--
+      The PWA's update affordance and the service worker behind it. Its own
+      module graph, loaded BEFORE main.js on purpose: a failed import anywhere
+      in the game's graph aborts that whole graph, and an update button that
+      dies with the thing it is meant to update is no use to anybody.
+    -->
+    <script type="module" src="js/update.js"></script>
+    <!-- The fullscreen pill. Same reasoning: self-contained, loaded first, and
+         not named fullscreen.js — a default uBlock list bans that basename
+         across github.io and took a whole game down with it once. -->
+    <script type="module" src="js/screen.js"></script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
