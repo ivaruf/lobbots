@@ -1,0 +1,822 @@
+:Build a playable browser-game prototype inspired very closely by the gameplay structure of the classic 1990 DOS game **Tank Wars by Kenneth Morse**.
+
+This is for **Gopher Cloud Arcade**.
+
+The goal is NOT to modernize the core game into something fundamentally different. Preserve as much of the original Tank Wars gameplay loop as practical, while giving it a polished, playful modern presentation.
+
+Do not copy original source code, graphics, sounds, names of proprietary assets, or other implementation material. Re-create the mechanics from scratch.
+
+## Core design principle
+
+Tank Wars worked because the underlying game was simple:
+
+1. Tanks are placed on a randomly generated 2D landscape.
+2. Players take turns.
+3. On your turn you choose:
+
+   * weapon
+   * firing angle
+   * firing power
+4. Wind influences the projectile.
+5. Fire.
+6. Projectile follows a visible ballistic trajectory.
+7. Explosion damages tanks and destroys/deforms terrain.
+8. Tanks can become exposed, buried, stranded or killed as terrain changes.
+9. Continue until one tank/team remains.
+10. Award money/points for performance/kills.
+11. **Open the shop.**
+12. Players spend their earnings on better weapons, guidance systems and defenses.
+13. Generate the next battlefield and continue the match.
+
+That entire loop is important.
+
+Especially:
+
+**DO NOT OMIT THE BETWEEN-ROUND SHOP.**
+
+The progression from basic artillery to ridiculous purchased weapons is a major part of the game.
+
+---
+
+# Technology
+
+Build this as a lightweight browser game suitable for static hosting.
+
+Prefer:
+
+* HTML
+* CSS
+* TypeScript or clean modern JavaScript
+* HTML Canvas for the battlefield/game rendering
+
+Do not introduce a heavyweight game engine unless there is a compelling reason.
+
+The game should work with:
+
+* mouse
+* keyboard
+* touch
+
+Design the underlying game state so that multiplayer networking can later be added using the existing Gopher Cloud Arcade WebRTC infrastructure.
+
+For now, prioritize:
+
+1. local hot-seat multiplayer
+2. human vs AI
+3. mixed human + AI matches
+
+Keep simulation/state sufficiently deterministic that a multiplayer version can eventually synchronize actions rather than stream continuous game state.
+
+---
+
+# Visual direction
+
+Gameplay remains strictly side-on 2D.
+
+Do NOT make this a freely rotating 3D battlefield.
+
+However, use **2.5D presentation** where appropriate:
+
+* chunky stylized tanks
+* shaded terrain
+* layered/parallax backgrounds
+* nice shell trails
+* smoke
+* debris
+* satisfying explosions
+* tank recoil
+* tank rocking/falling slightly when terrain underneath disappears
+* subtle screen shake for major explosions
+
+The battlefield must remain extremely readable.
+
+A player should be able to look at the screen and immediately estimate:
+
+"That tank is over there, this hill is between us, the wind is going left, I need a high shot."
+
+Do not let visual effects obscure that.
+
+---
+
+# Terrain
+
+Generate a new procedural terrain profile for every round.
+
+Terrain should be represented in a form that allows fast pixel-level or mask-based destruction.
+
+Projectile explosions carve circular/irregular craters out of it.
+
+After destruction, support configurable terrain behavior inspired by the original Tank Wars:
+
+### Static
+
+Terrain disappears where destroyed but otherwise does not move.
+
+### Crumble
+
+Unsupported terrain falls downward after explosions.
+
+### Collapse
+
+More aggressive settling/collapse of unsupported terrain.
+
+Implement the terrain system in a way that these modes can be experimented with.
+
+Tanks should settle downward when terrain beneath them disappears.
+
+If appropriate, tanks can slide/tip slightly, but do not turn this into a complicated rigid-body physics game.
+
+---
+
+# Players
+
+Support **2–10 tanks**.
+
+Each player has:
+
+* name
+* color
+* tank
+* health
+* money
+* current weapon inventory
+* guidance inventory/upgrades
+* defensive inventory/upgrades
+* kills
+* round wins
+* total score
+* human/AI flag
+* optional team
+
+Allow free-for-all and team games.
+
+Initial match setup should include:
+
+* number of players
+* human / AI for each
+* player name
+* player color
+* AI personality/difficulty
+* team assignment
+* number of rounds
+
+---
+
+# Turn system
+
+Classic turn-based artillery.
+
+On each turn show clearly:
+
+* current player
+* tank
+* health
+* angle
+* power
+* selected weapon
+* ammunition count
+* wind direction
+* wind strength
+
+Controls should make adjusting angle and power pleasant rather than fiddly.
+
+Support keyboard controls such as:
+
+* left/right = angle
+* up/down = power
+* space/enter = fire
+* weapon cycling keys
+
+But also provide obvious mouse/touch controls.
+
+After firing, controls lock until the projectile and resulting terrain/explosion effects resolve.
+
+Then advance to the next living player.
+
+---
+
+# Ballistics
+
+Implement proper projectile motion.
+
+Projectile trajectory is affected by:
+
+* firing angle
+* firing power
+* gravity
+* wind
+* weapon-specific modifiers
+
+The simulation should be easy to tune.
+
+Expose constants/configuration for:
+
+* gravity
+* wind range
+* projectile speed scaling
+* explosion radius
+* damage falloff
+
+Wind should be randomized each round or turn according to a configurable rule.
+
+Display it clearly.
+
+Optional visual wind indicators such as moving clouds/particles are welcome, but always retain a precise readable wind indicator.
+
+---
+
+# Damage
+
+Use distance-based explosion damage.
+
+A direct hit should be devastating.
+
+Near misses should cause partial damage.
+
+Terrain should absorb/block certain effects where sensible.
+
+Friendly fire remains possible unless a game option disables it.
+
+A tank dies at zero health.
+
+A round ends when:
+
+* one tank remains, OR
+* one team remains
+
+---
+
+# Economy
+
+Players earn currency/points from combat.
+
+Use values that can later be balanced from configuration.
+
+Reward primarily:
+
+* enemy kills
+* damage
+* surviving
+* winning the round
+
+Avoid runaway snowballing where the winning player automatically becomes unbeatable.
+
+Give weaker players enough income to remain dangerous.
+
+The basic cannon weapon should always remain available without needing to purchase ammunition.
+
+---
+
+# THE SHOP
+
+After EVERY round, show a shop phase.
+
+This is a major game system, not a placeholder menu.
+
+Each surviving/dead player gets an opportunity to spend accumulated money before the next round.
+
+Display:
+
+* available cash
+* weapon name
+* icon
+* short description
+* cost
+* quantity owned
+* purchase controls
+
+The original game structure included approximately:
+
+* **18 weapons**
+* **2 guidance systems**
+* **3 defensive systems**
+
+Aim for the same breadth.
+
+Do not worry if the first implementation has slightly fewer completed weapons, but architect the system around a data-driven catalog so reaching or exceeding this arsenal is trivial.
+
+Weapons/items should be declared as configuration/data rather than giant switch statements.
+
+---
+
+# Weapons
+
+Start with a broad arsenal capturing the spirit of classic artillery games.
+
+Examples:
+
+### Basic Shell
+
+Unlimited.
+Small explosion.
+Reliable baseline weapon.
+
+### Heavy Shell
+
+Larger blast radius and damage.
+
+### Mega Shell
+
+Expensive, huge conventional explosion.
+
+### Cluster Bomb
+
+Projectile splits near the top/end of its trajectory into multiple bomblets.
+
+### MIRV
+
+Splits into several independently falling explosive projectiles.
+
+### Roller
+
+Hits terrain and rolls downhill before exploding.
+
+### Bouncer
+
+Bounces off terrain a limited number of times.
+
+### Burrower
+
+Penetrates terrain before detonating.
+
+### Dirt Bomb
+
+Creates terrain instead of destroying it.
+
+### Earth Mover
+
+Moves/displaces a large amount of terrain.
+
+### Napalm
+
+Spreads secondary damaging explosions/fire across nearby terrain.
+
+### Laser
+
+Straight-line attack rather than ballistic projectile.
+
+### Heavy Laser
+
+More expensive/powerful beam.
+
+### Homing Missile
+
+Uses guidance to curve toward a selected enemy.
+
+### Air Strike
+
+Player selects a horizontal target position and explosives fall from above.
+
+### Volcano
+
+Creates several upward/outward secondary projectiles from the impact point.
+
+### Funky Bomb
+
+Unpredictable bouncing/multi-explosion weapon intended primarily for glorious chaos.
+
+### Nuke
+
+Extremely expensive.
+Massive terrain destruction and damage.
+Visually ridiculous.
+
+### Gopher Bomb
+
+Optional Gopher Cloud special weapon.
+Something delightfully absurd, but mechanically fair.
+
+These names/behaviors do not have to match the original game's exact arsenal. Where reliable information about an original mechanic is available, prefer preserving it. Otherwise preserve the **role and variety** rather than inventing fake historical accuracy.
+
+---
+
+# Guidance systems
+
+Implement two purchasable guidance categories.
+
+For example:
+
+### Targeting Computer
+
+Shows additional aiming/trajectory assistance.
+
+### Homing Guidance
+
+Allows compatible missiles to adjust toward a selected target.
+
+Make guidance systems expensive enough that ordinary ballistic aiming remains the heart of the game.
+
+Do NOT turn every shot into point-and-click targeting.
+
+---
+
+# Defensive systems
+
+Implement three defensive categories.
+
+Possible equivalents:
+
+### Armor
+
+Adds additional effective health.
+
+### Shield
+
+Absorbs incoming explosion damage until depleted.
+
+### Parachute / Fall Protection
+
+Protects against terrain-collapse/fall-related death if we implement meaningful fall damage.
+
+Again, preserve the original concept of purchasable defenses even if exact historical implementation details need approximation.
+
+---
+
+# AI
+
+Tank Wars historically supported several AI styles. Preserve that idea rather than implementing only Easy/Medium/Hard.
+
+Create approximately seven AI personalities built from shared aiming logic.
+
+For example:
+
+### Rookie
+
+Large aiming error.
+Often forgets previous results.
+
+### Improviser
+
+Moderate accuracy, chooses varied weapons.
+
+### Calculator
+
+Uses previous shot error to dial in angle/power.
+
+### Sniper
+
+Very accurate but conservative with expensive ammunition.
+
+### Maniac
+
+Strong preference for oversized explosives.
+
+### Economist
+
+Carefully purchases and conserves special weapons.
+
+### Chaos Gopher
+
+Makes strategically plausible but delightfully weird choices.
+
+The AI should not cheat by simply knowing the exact firing solution.
+
+It should estimate, fire, observe error, and refine subsequent shots.
+
+That makes fighting it feel like fighting another artillery player.
+
+---
+
+# Shot memory
+
+This is important.
+
+Players naturally learn from their previous shots:
+
+"72 power was short, so I'll try 76."
+
+Preserve that experience.
+
+The UI should keep angle and power settings between that player's turns instead of resetting them.
+
+AI should similarly remember previous attempts at targets.
+
+Wind changes can force recalculation.
+
+---
+
+# Match structure
+
+A match consists of multiple rounds.
+
+Allow configurable match lengths.
+
+Original Tank Wars allowed very long multi-round matches; support a sensible range such as:
+
+* 1
+* 3
+* 5
+* 10
+* custom
+
+Between rounds:
+
+1. calculate results
+2. award money
+3. show scoreboard
+4. run shop
+5. generate new terrain
+6. position tanks
+7. begin next round
+
+Purchased weapons and upgrades persist for the duration of the match.
+
+---
+
+# Random battlefield generation
+
+Include several terrain generation profiles:
+
+* rolling hills
+* steep mountains
+* deep valley
+* canyon
+* jagged chaos
+* mostly flat
+
+Randomly position tanks on valid terrain with reasonable separation.
+
+The generator should avoid impossible starts such as tanks spawning inside terrain or directly overlapping.
+
+Some arenas can intentionally be ridiculous when many tanks are selected.
+
+Six to ten tanks on a cramped battlefield should become wonderful artillery chaos.
+
+---
+
+# Configuration
+
+One charming aspect of old PC artillery games was configurability.
+
+Create an advanced game-options screen with toggles/options such as:
+
+* gravity
+* maximum wind
+* wind changes every round / every turn
+* terrain crumble mode
+* projectile trails on/off
+* friendly fire
+* team play
+* starting money
+* starting health
+* round count
+* AI difficulty/personality
+* explosion screen shake
+* shot timer
+* off-screen projectile behavior
+
+Do not require players to touch these settings.
+
+Provide a good default preset.
+
+Also provide:
+
+### Classic
+
+Close to old-school Tank Wars.
+
+### Quick
+
+Faster matches and shorter turn timer.
+
+### Mayhem
+
+More players, more money, bigger weapons.
+
+---
+
+# Off-screen shots
+
+Handle shells that leave the visible top or sides of the battlefield cleanly.
+
+Do not simply destroy projectiles immediately if their trajectory should naturally return.
+
+Allow them to travel offscreen mathematically and return to the battlefield.
+
+Consider a small indicator showing where an off-screen projectile currently is.
+
+Make this behavior configurable if practical.
+
+---
+
+# Camera
+
+Normally show the entire battlefield.
+
+When a projectile is fired:
+
+* track it subtly if required
+* keep enough battlefield context visible
+* briefly emphasize the explosion
+
+Avoid excessive cinematic camera movement.
+
+The player's ability to understand trajectory is more important than spectacle.
+
+---
+
+# Sound
+
+Create hooks for:
+
+* fire
+* projectile flight
+* explosion
+* terrain collapse
+* tank destroyed
+* purchase
+* round win
+
+Use generated/simple placeholder sounds initially if needed.
+
+No copyrighted assets.
+
+---
+
+# Feel
+
+This should have the same wonderful rhythm as old Tank Wars:
+
+quiet calculation...
+
+angle...
+
+power...
+
+fire...
+
+watch the tiny shell cross half the screen...
+
+"Ohhhh that's looking good..."
+
+BOOM.
+
+Then someone buys something catastrophically oversized from the shop.
+
+That rhythm matters more than visual complexity.
+
+Do not clutter it with:
+
+* character movement phases
+* inventories requiring elaborate management
+* platforming
+* realtime movement
+* complex physics
+* huge maps
+* progression outside the match
+* RPG systems
+
+This is artillery.
+
+Keep it artillery.
+
+---
+
+# Architecture
+
+Separate:
+
+* simulation/game state
+* renderer
+* input
+* ballistics
+* terrain
+* weapons/effects
+* economy
+* shop
+* AI
+* match/round lifecycle
+* UI
+* audio
+
+Weapons should share a common interface so bizarre new weapons can be added cheaply.
+
+Something conceptually like:
+
+Weapon {
+id
+name
+description
+price
+ammoPerPurchase
+category
+projectileBehavior
+impactBehavior
+blastRadius
+damage
+terrainEffect
+}
+
+Do not overengineer, but make weapon creation extremely easy.
+
+---
+
+# Multiplayer-ready design
+
+Do NOT implement networking before the local game is fun.
+
+However, avoid architecture that makes multiplayer difficult later.
+
+A future multiplayer client should ideally only need to transmit player decisions such as:
+
+* selected weapon
+* angle
+* power
+* target if applicable
+* shop purchases
+* ready state
+
+The host can be authoritative for:
+
+* random seed
+* terrain
+* wind
+* projectile outcome
+* damage
+* money
+* turn progression
+
+This fits the existing peer-hosted WebRTC philosophy of Gopher Cloud Arcade.
+
+---
+
+# First milestone
+
+Build an actually playable vertical slice before polishing everything.
+
+Milestone 1 must contain:
+
+* procedural destructible terrain
+* 2–4 tanks
+* hot-seat multiplayer
+* at least one AI opponent
+* angle + power aiming
+* wind
+* ballistic shell physics
+* visible projectile trajectory
+* explosions
+* crater creation
+* health/damage/death
+* round ending
+* money rewards
+* **working shop between rounds**
+* at least 6 purchasable weapons
+* purchased ammunition carrying into the following round
+* several rounds in one match
+* scoreboard
+
+This milestone should already be FUN.
+
+Do not spend the first iteration building menus, abstraction layers or visual polish while the artillery loop is unfinished.
+
+Once the vertical slice works, expand toward:
+
+* 2–10 players
+* ~18 weapons
+* 2 guidance systems
+* 3 defenses
+* seven AI personalities
+* teams
+* advanced configuration
+* improved effects
+* touch/mobile UX
+* eventual WebRTC multiplayer
+
+---
+
+# Development approach
+
+First inspect the repository and its local instructions.
+
+Understand the conventions already used by Gopher Cloud Arcade before changing anything.
+
+Then:
+
+1. Write a concise implementation plan.
+2. Identify reusable arcade infrastructure.
+3. Build the core playable loop.
+4. Run it.
+5. Test actual gameplay rather than only unit-level behavior.
+6. Fix obvious gameplay/UX problems.
+7. Continue until the complete first milestone works.
+
+Make reasonable decisions yourself instead of stopping for minor questions.
+
+Prefer working software over speculative abstractions.
+
+And above all:
+
+**Do not accidentally make Worms.**
+
+No walking around.
+
+No jumping.
+
+No ropes.
+
+No long character turns.
+
+The tank stays where the terrain put it.
+
+The joy is figuring out the ballistic shot, blowing enormous chunks out of the landscape, earning money, and coming back next round with increasingly unreasonable weaponry.
+
