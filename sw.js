@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.1.0'; // Milestone 1: the artillery loop, the shop, four hills and seven bots
+const VERSION = 'v0.1.1'; // the arrows swing the barrel the right way, and a held key moves fast
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is

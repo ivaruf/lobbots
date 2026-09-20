@@ -432,11 +432,15 @@ const input = createInput(canvas, {
 });
 input.setEnabled(bool);   // main enables only during a human's aim
 ```
-Keys: `←`/`→` angle, `↑`/`↓` power, hold accelerates (1/s → 10/s over
-~1.5 s); `Shift` = single steps; `Q`/`E`/`Tab` weapon; `Space`/`Enter` fire;
-`Esc` pause. Ignores keys when a button or text field has focus. Pointer:
-drag on the canvas: horizontal = angle (4 px per degree), vertical = power
-(4 px per point); a tap without drag does nothing (no click-to-fire).
+Keys: `←`/`→` swing the BARREL left and right (so `→` lowers the angle,
+because 0° points right), `↑`/`↓` power, hold accelerates fast (18/s →
+110/s over 0.9 s after a 0.2 s dwell: the whole 0–180 sweep in about two
+seconds); `Shift` = single steps; `Q`/`E`/`Tab` weapon; `Space`/`Enter`
+fire; `Esc` pause. Ignores keys when a button or text field has focus.
+Pointer: drag on the canvas: horizontal = barrel direction (4 px per
+degree, right is right), vertical = power (4 px per point); a tap without
+drag does nothing (no click-to-fire). The HUD's angle pills are ◂ ▸ and
+mean the same thing as the keys.
 
 ### audio — `js/audio.js`
 

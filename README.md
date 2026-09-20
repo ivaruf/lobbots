@@ -52,7 +52,7 @@ simply does not appear; serve `~/projects/games` instead to see it.
 
 | Action        | Keyboard                       | Mouse / touch                          |
 | ------------- | ------------------------------ | -------------------------------------- |
-| Angle         | `←` `→` (hold to accelerate)   | − / + pills, or drag sideways on the field |
+| Barrel        | `←` `→` swing it (hold to speed up) | ◂ ▸ pills, or drag sideways on the field |
 | Power         | `↑` `↓`                        | − / + pills, or drag up and down       |
 | Fine steps    | hold `Shift`                   | tap the pills                          |
 | Weapon        | `Q` `E` or `Tab`               | tap it in the strip                    |

@@ -42,19 +42,19 @@
 // A press is one step. Keep holding and, after a beat long enough that a tap
 // is never two steps, it repeats — starting brisk and winding up.
 //
-// ARCHITECTURE.md §12 says "1/s -> 10/s over ~1.5 s" and this is faster than
-// that on purpose: angle runs 0..180 and power 1..100, so a 10/s ceiling
-// means eighteen seconds of held button to swing the barrel across, which is
-// not a control, it is a punishment. Shift (keyboard) and the drag (touch)
-// are the fine adjustments; the pills are the coarse one.
+// The ramp is QUICK, and quicker than the first playtest had it: angle runs
+// 0..180 and power 1..100, and the owner's first note was that a held key
+// crawled. A held arrow now swings the barrel across the whole field in
+// about two seconds, the way the old DOS game did. Fine control is a tap
+// (one step), Shift on the keyboard (one step, no repeat), or the drag.
 // ---------------------------------------------------------------------------
 
 /** Seconds a press is held before it begins to repeat at all. */
-export const HOLD_DELAY = 0.26;
+export const HOLD_DELAY = 0.2;
 
-const RATE_START = 8; // steps/second the moment repeating starts
-const RATE_END = 34; // steps/second once wound all the way up
-const RAMP = 1.5; // seconds from one to the other
+const RATE_START = 18; // steps/second the moment repeating starts
+const RATE_END = 110; // steps/second once wound all the way up
+const RAMP = 0.9; // seconds from one to the other
 
 /** Steps per second for a press that has been held `heldSeconds`. */
 export function holdRate(heldSeconds) {
@@ -172,7 +172,10 @@ export function createInput(canvas, handlers = {}) {
     switch (e.key) {
       case 'ArrowLeft':
       case 'ArrowRight': {
-        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        // The keys move the BARREL, not the number: 0° points right and 180°
+        // points left, so the right arrow lowers the angle. Reading it the
+        // other way round was the first bug the owner found.
+        const dir = e.key === 'ArrowRight' ? -1 : 1;
         e.preventDefault();
         // Shift is the fine adjustment: one degree per press, no repeat, and
         // OS key-repeat ignored so a leaned-on key cannot sneak a ramp in.
@@ -260,7 +263,9 @@ export function createInput(canvas, handlers = {}) {
     lastX = e.clientX;
     lastY = e.clientY;
 
-    accA += dx / PX_PER_STEP;
+    // Dragging right swings the barrel right, which is a SMALLER angle
+    // (0° is right, 180° is left); the readout follows the barrel.
+    accA += -dx / PX_PER_STEP;
     // y grows downward on screen; dragging UP is more power.
     accP += -dy / PX_PER_STEP;
 
