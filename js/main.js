@@ -98,6 +98,7 @@ const ui = createUI({
   onResume: resume,
   onQuit: quitMatch,
   onVolume: (v) => audio.setVolume(v),
+  onSkip: skipRound,
   onBotSpeed: (v) => {
     botSpeed = v;
     try { localStorage.setItem(BOT_SPEED_KEY, String(v)); } catch { /* private mode: lasts the visit */ }
@@ -395,6 +396,34 @@ function humansOut() {
   return true;
 }
 
+/** No human walker is standing: everyone is out, or nobody was ever in. */
+function onlyBotsLeft() {
+  if (!match || !match.world || (match.state !== 'aim' && match.state !== 'firing')) return false;
+  return !match.humans().length || humansOut();
+}
+
+/**
+ * Skip to results: the sim plays the rest of the round out in one go
+ * (match.skipRound), and only what the screen needs afterwards is passed on.
+ * The terrain redraws for the craters it now has; the round's ending is
+ * reacted to as usual, fanfare and results. Every blast, death and banner in
+ * between is dropped: replaying a hundred explosions in one frame is noise,
+ * not a summary.
+ */
+const SKIP_KEEP = new Set(['terrainChanged', 'roundOver', 'awards', 'matchOver']);
+function skipRound() {
+  if (paused || !onlyBotsLeft()) return;
+  processEvents();
+  const all = match.skipRound([]);
+  for (const e of all) {
+    if (!SKIP_KEEP.has(e.type)) continue;
+    renderer.onEvent(e);
+    react(e);
+  }
+  accumulator = 0;
+  ui.setSkip(false);
+}
+
 /** A bot is the one playing: its turn, or a round no human is left in. */
 function botsPlaying() {
   if (!match || (match.state !== 'aim' && match.state !== 'firing')) return false;
@@ -435,6 +464,7 @@ function frame(now) {
 
   if (match && mode === 'play' && !paused) {
     noticeOut();
+    ui.setSkip(onlyBotsLeft());
     const speed = botsPlaying() ? botSpeed : 1;
     const maxSteps = 12 * speed;
     accumulator += dt * speed;

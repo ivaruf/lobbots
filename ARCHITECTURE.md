@@ -131,8 +131,13 @@ deathBlast {id, weaponId, x, y}          a wreck cooking off; its explosion foll
 ### State machine (match.js)
 
 ```
-setup -> roundStart -> aim -> firing -> (aim | roundOver) -> scoreboard -> shop -> (roundStart | matchOver)
+setup -> [shop] -> roundStart -> aim -> firing -> (aim | roundOver) -> scoreboard -> shop -> (roundStart | matchOver)
 ```
+
+The opening `[shop]` runs only when `settings.startMoney > 0` (the setup
+screen's START BOLTS row), so starting money is spent before round one rather
+than sitting unused until after it. `match.skipRound(events)` steps the same
+fixed SIM_DT until the round is over, for the HUD's Skip to results.
 
 - `aim`: `match.current` is the player whose turn it is. Human: waits for a
   `fire` action. AI: `ai.js` is asked for a decision once, on entering the

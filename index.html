@@ -113,6 +113,19 @@
               value="5"
             />
           </div>
+
+          <!-- What everyone has in their pocket before round one. Anything
+               above nothing opens the parts counter before the first hill,
+               so a rich start is a first round with real weapons in it. -->
+          <div class="row">
+            <span class="label" id="lbl-money">Start bolts</span>
+            <div
+              class="seg"
+              data-seg="money"
+              role="group"
+              aria-labelledby="lbl-money"
+            ></div>
+          </div>
         </div>
 
         <!-- The roster. #seats scrolls inside its own box rather than growing
@@ -203,6 +216,10 @@
           </div>
 
           <div id="shot-timer" hidden>0</div>
+
+          <!-- Only once no human walker is left standing this round: play the
+               bots' fight out at once and go to the results. -->
+          <button type="button" id="skip-btn" hidden>Skip to results ▸▸</button>
         </div>
 
         <div id="hud-bottom">

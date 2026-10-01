@@ -43,6 +43,16 @@ import { holdRate, HOLD_DELAY } from './input.js';
 /** Where the last setup is remembered. Hub §6: <slug>.<thing>.v<n>. */
 const SETUP_KEY = 'lobbots.setup.v1';
 
+/** Starting purses offered on the setup screen. Includes every preset's own. */
+const MONEY_STEPS = [0, 500, 800, 1200, 4000, 10000];
+
+/** 1200 -> "1.2k", 800 -> "800": short enough for six pills on a phone. */
+function shortBolts(n) {
+  if (n < 1000) return String(n);
+  const k = n / 1000;
+  return `${Number.isInteger(k) ? k : k.toFixed(1)}k`;
+}
+
 // ---------------------------------------------------------------------------
 // Small shared helpers
 // ---------------------------------------------------------------------------
@@ -504,6 +514,7 @@ export function createUI(callbacks = {}) {
     onQuit() {},
     onVolume() {},
     onBotSpeed() {},
+    onSkip() {},
     ...callbacks,
   };
 
@@ -526,6 +537,7 @@ export function createUI(callbacks = {}) {
   const presetBlurb = $('preset-blurb');
   const roundsSeg = screens.setup.querySelector('[data-seg="rounds"]');
   const roundsCustom = $('rounds-custom');
+  const moneySeg = screens.setup.querySelector('[data-seg="money"]');
   const roundsInput = $('rounds-input');
   const seatsBox = $('seats');
   const seatCount = $('seat-count');
@@ -550,6 +562,11 @@ export function createUI(callbacks = {}) {
   const windBar = $('wind-bar');
   const windHead = $('wind-head');
   const shotTimer = $('shot-timer');
+  const skipBtn = $('skip-btn');
+  skipBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    cb.onSkip();
+  });
 
   const angleVal = $('angle-val');
   const angleUnit = $('angle-unit');
@@ -595,6 +612,8 @@ export function createUI(callbacks = {}) {
     preset: 'default',
     rounds: 5,
     custom: false,
+    money: resolveSettings('default').startMoney,
+    moneyTouched: false,
     roundsTouched: false,
     seatsTouched: false,
     seats: [],
@@ -660,6 +679,8 @@ export function createUI(callbacks = {}) {
           preset: setup.preset,
           rounds: setup.rounds,
           custom: setup.custom,
+          money: setup.money,
+          moneyTouched: setup.moneyTouched,
           seats: setup.seats.map((s) => ({
             name: s.name,
             colorIndex: s.colorIndex,
@@ -734,12 +755,26 @@ export function createUI(callbacks = {}) {
         setup.rounds = resolveSettings(id).rounds;
         setup.custom = false;
       }
+      if (!setup.moneyTouched) setup.money = resolveSettings(id).startMoney;
       if (!setup.seatsTouched) {
         defaultSeats(id);
         renderSeats();
       }
       renderPreset();
       renderRounds();
+      renderMoney();
+    },
+  );
+
+  // Every preset's own purse is one of these, so a preset always has a pill
+  // to light up; 0 and 10k are the two ends worth playing with.
+  buildSeg(
+    moneySeg,
+    MONEY_STEPS.map((v) => ({ v, label: shortBolts(v), title: `${comma(v)} bolts each to start` })),
+    (v) => {
+      setup.money = v;
+      setup.moneyTouched = true;
+      renderMoney();
     },
   );
 
@@ -778,6 +813,10 @@ export function createUI(callbacks = {}) {
   function renderPreset() {
     markSeg(presetSeg, setup.preset);
     setText(presetBlurb, (PRESETS[setup.preset] || PRESETS.default).blurb);
+  }
+
+  function renderMoney() {
+    markSeg(moneySeg, setup.money);
   }
 
   function renderRounds() {
@@ -935,7 +974,7 @@ export function createUI(callbacks = {}) {
       // its own side until they are.
       team: null,
     }));
-    const settings = resolveSettings(setup.preset, { rounds: setup.rounds });
+    const settings = resolveSettings(setup.preset, { rounds: setup.rounds, startMoney: setup.money });
     cb.onStart(specs, settings);
   });
 
@@ -1524,10 +1563,20 @@ export function createUI(callbacks = {}) {
         if (saved) {
           adoptSpecs(saved.seats, saved.preset, saved.rounds);
           setup.custom = !!saved.custom || ![1, 3, 5, 10].includes(setup.rounds);
+          // Older saves have no purse: keep the preset's, untouched.
+          if (MONEY_STEPS.includes(saved.money)) {
+            setup.money = saved.money;
+            setup.moneyTouched = !!saved.moneyTouched;
+          } else {
+            setup.money = resolveSettings(setup.preset).startMoney;
+            setup.moneyTouched = false;
+          }
         } else {
           setup.preset = 'default';
           setup.rounds = resolveSettings('default').rounds;
           setup.custom = false;
+          setup.money = resolveSettings('default').startMoney;
+          setup.moneyTouched = false;
           setup.roundsTouched = false;
           setup.seatsTouched = false;
           defaultSeats('default');
@@ -1535,6 +1584,7 @@ export function createUI(callbacks = {}) {
       }
       renderPreset();
       renderRounds();
+      renderMoney();
       renderSeats();
       show('setup');
     },
@@ -1570,6 +1620,12 @@ export function createUI(callbacks = {}) {
 
     banner,
     setExit,
+
+    /** The skip button: up only while no human is standing this round. */
+    setSkip(available) {
+      if (skipBtn.hidden === !available) return;
+      skipBtn.hidden = !available;
+    },
 
     /** Bot speed as a multiplier, 1..4. Sets the slider without calling back. */
     setBotSpeed(v) {

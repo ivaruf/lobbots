@@ -241,4 +241,32 @@ report(playMatch('all seven, mayhem, 2 rounds', resolveSettings('mayhem', { roun
 report(playMatch('ten bots, quick, 2 rounds, collapse', resolveSettings('quick', { rounds: 2, seed: 4242, terrainMode: 'collapse' }),
   Array.from({ length: 10 }, (_, i) => ({ name: `Bot${i}`, colorIndex: i, isAI: true, personality: PERSONALITY_IDS[i % PERSONALITY_IDS.length] }))));
 
+// ---------------------------------------------------------------------------
+// 4. The opening shop runs when there is money and not when there is none,
+//    and skipRound plays a round out to its end in one call.
+// ---------------------------------------------------------------------------
+{
+  const bots = four.map((s) => ({ ...s }));
+  const rich = new Match(resolveSettings('default', { rounds: 2, seed: 61, startMoney: 10000 }), bots);
+  const ev = [];
+  rich.start(ev);
+  assert(rich.state === 'shop' && rich.round === 0, `rich start opened in ${rich.state}, round ${rich.round}`);
+  let guard = 0;
+  while (rich.state === 'shop' && guard++ < 120 * 60) { ev.length = 0; rich.step(SIM_DT, ev); }
+  assert(rich.state === 'aim' && rich.round === 1, `opening shop never led into round 1 (${rich.state})`);
+  assert(rich.players.some((p) => Object.keys(p.inventory).length > 1), 'nobody bought anything with 10k bolts');
+
+  const broke = new Match(resolveSettings('default', { rounds: 1, seed: 62, startMoney: 0 }), bots);
+  broke.start([]);
+  assert(broke.state === 'aim' && broke.round === 1, `a zero-money start went to ${broke.state}`);
+
+  ev.length = 0;
+  rich.skipRound(ev);
+  assert(rich.state === 'scoreboard', `skipRound left the match in ${rich.state}`);
+  assert(ev.some((e) => e.type === 'roundOver'), 'skipRound emitted no roundOver');
+  const teams = new Set(rich.world.mechs.filter((m) => m.alive).map((m) => m.team));
+  assert(teams.size <= 1, `skipRound ended with ${teams.size} teams standing`);
+}
+console.log('opening shop and skip: ok');
+
 console.log('sim-smoke: ok');

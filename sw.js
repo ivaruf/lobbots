@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.2.2'; // one bot speed slider instead of a turbo pill
+const VERSION = 'v0.2.3'; // start bolts and an opening shop; skip to results
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is

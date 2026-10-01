@@ -867,6 +867,31 @@ button:disabled {
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
+/* The one tappable thing in the top strip, and only while no human is
+   standing: there is nothing to aim then, so the drag area is not missed. */
+#skip-btn {
+  margin-left: auto;
+  pointer-events: auto;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: rgba(21, 24, 30, 0.85);
+  color: var(--accent);
+  font-family: var(--head);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+#skip-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+#skip-btn[hidden] {
+  display: none;
+}
 #shot-timer.urgent {
   color: var(--danger);
   animation: urgent 0.8s steps(2) infinite;

@@ -7,13 +7,12 @@ shell cross the sky while the wind has its say. Craters change the ground,
 the ground gives way under whoever was standing on it, and the last one
 standing takes the round. Then everyone shops, and the next hill is built.
 
-The directory and repo are still called `tankwars`, the working name. The
-slug is the published URL and the storage prefix, so every cache and storage
-key is already `lobbots.*`; renaming the folder is the owner's to do between
-sessions.
+The directory and published slug are `lobbots`, and cache and storage keys use
+`lobbots.*`.
 
-Part of the [games hub](../CLAUDE.md). In development: not deployed and not
-in the arcade yet.
+Part of the [games hub](../CLAUDE.md). Registered in Arcade on the southwest
+**proving ground** island, with a cabinet and take-home machine. The integration
+is local until the Arcade and Lobbots repositories are deployed.
 
 ## Run it
 
@@ -32,8 +31,10 @@ simply does not appear; serve `~/projects/games` instead to see it.
 
 1. **Setup.** Two to ten seats. Each is a human or a bot; bots come in seven
    personalities (Rookie, Improviser, Calculator, Sniper, Maniac, Economist,
-   Chaos Gopher). Pick a preset (Default, Classic, Quick, Mayhem) and a
-   number of rounds.
+   Chaos Gopher). Pick a preset (Default, Classic, Quick, Mayhem), a number
+   of rounds, and how many bolts everyone starts with. Any starting money
+   opens the shop before round one, so a 10k start is a first round fought
+   with nukes; 0 goes straight onto the hill with shells.
 2. **A round.** Everyone stands on a fresh hill. On your turn: weapon, angle,
    power, fire. Wind is shown as an arrow and a number; the shell's arc is
    drawn as it flies and your last shot stays as a ghost while you aim the
@@ -79,6 +80,10 @@ on its turns, and for the rest of a round once every human is wrecked — the
 whole game runs that much faster: thinking, aiming, shells and cook-offs
 together. Your own shots always fly at ×1. It starts at ×1 and is remembered
 next time you play.
+
+Once no human is left standing in a round, **Skip to results** appears in the
+top bar: the rest of the round is played out at once, to exactly the result
+watching it would have shown, and you go straight to the scoreboard.
 
 ## Move
 

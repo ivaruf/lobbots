@@ -12,7 +12,10 @@
  * through apply(); nothing reaches in. Everything that happens comes back
  * out on the events array.
  *
- *   setup -> aim <-> firing -> scoreboard -> shop -> aim ... -> matchOver
+ *   setup -> [shop] -> aim <-> firing -> scoreboard -> shop -> aim ... -> matchOver
+ *
+ * The opening [shop] runs only when there is starting money to spend, so a
+ * rich start means a first round fought with real weapons in it.
  *
  * Angle, power and weapon belong to the PLAYER and persist between their
  * turns and across rounds: shot memory is a rule here, not a UI nicety.
@@ -20,7 +23,7 @@
 
 import {
   PALETTE, ECONOMY, SCORE, TURN_GAP, AI_THINK_MIN, AI_THINK_MAX,
-  AI_ANGLE_RATE, AI_POWER_RATE, AI_SHOP_DWELL, AUTO_ADVANCE, WIDTH, MOVE_RANGE, resolveSettings,
+  AI_ANGLE_RATE, AI_POWER_RATE, AI_SHOP_DWELL, AUTO_ADVANCE, WIDTH, MOVE_RANGE, SIM_DT, resolveSettings,
 } from '../config.js';
 import { mulberry32, hash, randomSeed, range } from './rng.js';
 import { World } from './world.js';
@@ -142,10 +145,14 @@ export class Match {
   // Actions
   // -------------------------------------------------------------------------
 
-  /** Begin. Emits roundStart and the first turnStart. */
+  /**
+   * Begin. With starting money, everyone shops first and roundStart follows
+   * when the last shopper is done; with none, straight onto the hill.
+   */
   start(events) {
     this.events = events;
-    this.startRound();
+    if (this.settings.startMoney > 0) this.openShop();
+    else this.startRound();
   }
 
   /**
@@ -486,6 +493,21 @@ export class Match {
     this.shot = null;
     if (this.world.aliveTeams().size <= 1) { this.endRound(); return; }
     this.beginTurn(this.nextAliveSeat());
+  }
+
+  /**
+   * Play the rest of this round out at once, for when nobody is left to
+   * watch it but bots. It is the same fixed step as always, just without the
+   * waiting, so the result is the one watching would have shown. Steps until
+   * the round is over (or `maxSeconds` of game time, a guard that should never
+   * be reached) and returns the events in order for the caller to filter.
+   */
+  skipRound(events, maxSeconds = 900) {
+    const limit = Math.ceil(maxSeconds / SIM_DT);
+    for (let i = 0; i < limit && (this.state === 'aim' || this.state === 'firing'); i++) {
+      this.step(SIM_DT, events);
+    }
+    return events;
   }
 
   // -------------------------------------------------------------------------
