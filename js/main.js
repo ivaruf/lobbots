@@ -27,6 +27,7 @@ import { Match } from './sim/match.js';
 import { PERSONALITIES } from './sim/ai.js';
 import { weaponById } from './sim/weapons.js';
 import { createRenderer } from './render/render.js';
+import { drawMechPortrait } from './render/mech-draw.js';
 import { createUI } from './ui.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
@@ -42,6 +43,23 @@ const RESULTS_DELAY = 1.6;
 
 /** Crumble is continuous; the rumble should not be. */
 const CRUMBLE_COOLDOWN = 0.6;
+
+/**
+ * Walk-marker px per unit of angle intent. The angle hold-repeat tops out at
+ * 110 units a second, so a held arrow crosses the whole walk range in about
+ * two seconds — the same feel as sweeping the barrel.
+ */
+const WALK_STEP = 2;
+
+/**
+ * Turbo: once every human walker is wrecked for the round there is nothing
+ * left to decide, only bots to watch, so the sim runs this many times faster
+ * until the round is over. It is purely more SIM_DT steps per real second —
+ * the sim never sees a different dt, so a turbo round is the same round, and
+ * the bots' think pauses, barrel swings and shells all speed up together.
+ * The player can tap it off; that choice lasts the match.
+ */
+const TURBO_SPEED = 3;
 
 const canvas = document.getElementById('field');
 const renderer = createRenderer(canvas);
@@ -59,12 +77,16 @@ let crumbleTimer = 0;
 let lastSpecs = null;
 let lastPreset = 'default';
 let lastRounds = null;
+let turboWanted = true;   // the player's choice; turbo only runs when they are out
+let turboShown = false;   // the button is up (every human is out this round)
+let turboRound = 0;       // the round the "you're out" banner was last shown in
 
 // ---------------------------------------------------------------------------
 // UI and input: intents in, actions out
 // ---------------------------------------------------------------------------
 
 const ui = createUI({
+  paintPortrait: drawMechPortrait,
   onStart: startMatch,
   onAngle: (d) => aimDelta({ angle: d }),
   onPower: (d) => aimDelta({ power: d }),
@@ -76,6 +98,10 @@ const ui = createUI({
   onResume: resume,
   onQuit: quitMatch,
   onVolume: (v) => audio.setVolume(v),
+  onTurbo: () => {
+    turboWanted = !turboWanted;
+    ui.setTurbo(turboShown, turboWanted);
+  },
 });
 
 const input = createInput(canvas, {
@@ -94,6 +120,12 @@ function humanNow() {
 function aimDelta({ angle = 0, power = 0 }) {
   const p = humanNow();
   if (!p) return;
+  if (p.weaponId === 'move') {
+    // The barrel intents walk the marker instead. A positive angle delta
+    // swings the barrel LEFT (0° points right), so it walks the marker left.
+    if (angle && p.moveX !== null) match.apply({ type: 'aim', playerId: p.id, moveX: p.moveX - angle * WALK_STEP });
+    return;
+  }
   match.apply({ type: 'aim', playerId: p.id, angle: p.angle + angle, power: p.power + power });
 }
 
@@ -116,6 +148,15 @@ function selectWeapon(dirOrId) {
 function fire() {
   const p = humanNow();
   if (!p) return;
+  if (p.weaponId === 'move') {
+    // Refused when the first step is already a wall: nothing is spent, so
+    // say why rather than leave the button looking broken.
+    if (!match.apply({ type: 'move', playerId: p.id })) {
+      audio.play('click', { gain: 0.5, rate: 0.7 });
+      ui.banner('Cannot walk that way', 'Pick the other side, or shoot', 1100);
+    }
+    return;
+  }
   match.apply({ type: 'fire', playerId: p.id, weaponId: p.weaponId, angle: p.angle, power: p.power });
 }
 
@@ -158,6 +199,10 @@ function startMatch(specs, settings) {
   accumulator = 0;
   resultsTimer = 0;
   paused = false;
+  turboWanted = true;
+  turboShown = false;
+  turboRound = 0;
+  ui.setTurbo(false, true);
   mode = 'play';
   ui.hidePause();
   ui.showHud();
@@ -230,7 +275,8 @@ function react(e) {
         if (match.humans().length > 1) ui.banner(`${p.name}, your turn`, 'Angle, power, fire', 1400);
       } else {
         const P = PERSONALITIES[p.personality];
-        ui.banner(`${p.name} is aiming`, P ? P.name : 'bot', 1000);
+        const walking = match.aiPlan && match.aiPlan.weaponId === 'move';
+        ui.banner(walking ? `${p.name} is on the move` : `${p.name} is aiming`, P ? P.name : 'bot', 1000);
       }
       break;
     }
@@ -239,6 +285,29 @@ function react(e) {
       ui.lockControls(true);
       const w = weaponById(e.weaponId);
       audio.play('fire', { gain: 0.7 + 0.3 * (e.power / 100), rate: w.radius > 50 ? 0.8 : 1 });
+      break;
+    }
+    case 'walkStart': {
+      input.setEnabled(false);
+      ui.lockControls(true);
+      audio.play('click', { gain: 0.7, rate: 0.55 });
+      break;
+    }
+    case 'walkEnd': {
+      audio.play('bounce', { gain: 0.35, rate: 0.6 });
+      const p = match.player(e.playerId);
+      if (e.blocked && p && !p.isAI) ui.banner('Stopped short', 'Too steep to go on', 900);
+      break;
+    }
+    case 'deathBlast': {
+      // The wreck's own boom comes from the explosion event that follows;
+      // this is only the headline. A nuke gets shouted.
+      const p = match.player(e.id);
+      const w = weaponById(e.weaponId);
+      if (p) {
+        if (e.weaponId === 'nuke') ui.banner(`${p.name}'s reactor goes critical`, 'NUKE', 1600);
+        else ui.banner(`${p.name}'s wreck cooks off`, w.name, 1000);
+      }
       break;
     }
     case 'apex': {
@@ -312,6 +381,35 @@ function react(e) {
 // The loop
 // ---------------------------------------------------------------------------
 
+/**
+ * Every human has been wrecked this round and bots are still fighting it out.
+ * An all-bot match is not "you are out" — nobody was ever in — so it plays at
+ * normal speed; it is a show someone chose to watch.
+ */
+function humansOut() {
+  if (!match || !match.world || (match.state !== 'aim' && match.state !== 'firing')) return false;
+  const humans = match.humans();
+  if (!humans.length) return false;
+  for (const h of humans) {
+    const m = match.world.mechFor(h.id);
+    if (m && m.alive) return false;
+  }
+  return true;
+}
+
+/** Show or hide the turbo button as the round goes; announce it once. */
+function syncTurbo() {
+  const out = humansOut();
+  if (out !== turboShown) {
+    turboShown = out;
+    ui.setTurbo(out, turboWanted);
+    if (out && turboRound !== match.round) {
+      turboRound = match.round;
+      ui.banner(match.humans().length > 1 ? 'Everyone is out' : 'You are out', `Turbo ×${TURBO_SPEED} — the bots settle it`, 1400);
+    }
+  }
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - lastFrame) / 1000;
@@ -324,15 +422,18 @@ function frame(now) {
   if (crumbleTimer > 0) crumbleTimer -= dt;
 
   if (match && mode === 'play' && !paused) {
-    accumulator += dt;
+    syncTurbo();
+    const speed = turboShown && turboWanted ? TURBO_SPEED : 1;
+    const maxSteps = 12 * speed;
+    accumulator += dt * speed;
     let steps = 0;
-    while (accumulator >= SIM_DT && steps < 12) {
+    while (accumulator >= SIM_DT && steps < maxSteps) {
       match.step(SIM_DT, events);
       accumulator -= SIM_DT;
       steps++;
     }
     // Fell behind badly: drop the debt rather than spiral.
-    if (steps === 12) accumulator = 0;
+    if (steps === maxSteps) accumulator = 0;
     processEvents();
 
     if (resultsTimer > 0) {

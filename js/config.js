@@ -71,6 +71,36 @@ export const TERRAIN_SHADOW = 0.5;
  *  survivable and the nuke-at-your-own-feet a lesson rather than a suicide. */
 export const SELF_DAMAGE_SCALE = 0.5;
 
+/**
+ * Move: the owner's own idea, not Tank Wars'. A bought Move spends the turn
+ * walking instead of shooting. The walker goes up to MOVE_RANGE px either
+ * way at WALK_SPEED, follows the ground, and refuses two things: a climb
+ * steeper than WALK_MAX_RISE px per px (a cliff), and a drop it would take
+ * fall damage from (it stops at the lip rather than stepping off). It also
+ * will not walk through another walker. Either refusal stops it short, and
+ * world.walkPreview() shows exactly where before the player commits.
+ */
+export const MOVE_RANGE = 220;
+export const WALK_SPEED = 75;
+export const WALK_MAX_RISE = 2;
+
+/**
+ * Death blasts, as in the original: a wreck does not just sit there. Shortly
+ * after a walker dies its magazine cooks off as one weapon drawn from this
+ * table, so a kill next to a rival can take them too, and once in a while a
+ * wreck goes up as a nuke. Weights, not percentages; they happen to sum to
+ * 100. Special-flight weapons (MIRV, roller, bouncer, funky, burrower) are
+ * thrown up out of the wreck and fly as themselves; everything else goes off
+ * in place. The delay is the half-second in which everyone nearby realises.
+ */
+export const DEATH_BLASTS = [
+  ['shell', 21], ['heavy', 20], ['mega', 10], ['cluster', 9], ['napalm', 8],
+  ['funky', 6], ['bouncer', 5], ['roller', 4], ['mirv', 4], ['dirt', 4],
+  ['volcano', 4], ['burrower', 2], ['nuke', 3],
+];
+export const COOKOFF_MIN = 0.55;
+export const COOKOFF_MAX = 1.1;
+
 // ---------------------------------------------------------------------------
 // Terrain
 // ---------------------------------------------------------------------------
@@ -173,16 +203,16 @@ export const SCORE = {
 // ---------------------------------------------------------------------------
 
 export const PALETTE = [
-  { id: 'red',    name: 'Ember',   hex: '#ff4b3e' },
-  { id: 'blue',   name: 'Cobalt',  hex: '#3f8cff' },
-  { id: 'yellow', name: 'Hazard',  hex: '#ffd23f' },
-  { id: 'green',  name: 'Moss',    hex: '#4fd66b' },
-  { id: 'orange', name: 'Rust',    hex: '#ff8f2b' },
-  { id: 'purple', name: 'Violet',  hex: '#b76bff' },
-  { id: 'cyan',   name: 'Coolant', hex: '#3fe0e0' },
-  { id: 'pink',   name: 'Flare',   hex: '#ff6fb1' },
+  { id: 'red',    name: 'Ember',   hex: '#e78d89' },
+  { id: 'blue',   name: 'Cobalt',  hex: '#86b4ef' },
+  { id: 'yellow', name: 'Alloy',  hex: '#d7c8a4' },
+  { id: 'green',  name: 'Moss',    hex: '#8bc6b1' },
+  { id: 'orange', name: 'Rust',    hex: '#dca688' },
+  { id: 'purple', name: 'Violet',  hex: '#b6a0dc' },
+  { id: 'cyan',   name: 'Coolant', hex: '#8cd6de' },
+  { id: 'pink',   name: 'Flare',   hex: '#d9a2be' },
   { id: 'white',  name: 'Chalk',   hex: '#eef0f4' },
-  { id: 'lime',   name: 'Acid',    hex: '#c6ff3f' },
+  { id: 'lime',   name: 'Acid',    hex: '#b8ca92' },
 ];
 
 export const MIN_PLAYERS = 2;
@@ -209,6 +239,7 @@ export const DEFAULTS = {
   shotTimer: 0,           // seconds per human turn; 0 = no timer
   offscreen: 'open',      // side edges: 'open' | 'wrap' | 'bounce' | 'vanish'
   fallDamage: true,
+  deathBlasts: true,      // wrecks cook off as a random weapon (DEATH_BLASTS)
   moneyScale: 1,          // multiplies every award
   seed: null,             // null = roll one
 };

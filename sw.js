@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.1.1'; // the arrows swing the barrel the right way, and a held key moves fast
+const VERSION = 'v0.2.0'; // wrecks cook off, Move walks, every shell its own sprite
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is
@@ -56,6 +56,7 @@ const ASSETS = [
   './js/render/sky.js',
   './js/render/terrain-draw.js',
   './js/render/mech-draw.js',
+  './js/render/projectile-draw.js',
   './js/render/effects.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

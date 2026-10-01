@@ -69,8 +69,14 @@
         <div class="plate-strip" aria-hidden="true"></div>
 
         <header class="screen-head">
-          <h1 id="logo">Lobbots</h1>
+          <p class="kicker hangar-kicker"><i></i> Precision robotics</p>
+          <h1 id="logo">Lob<span>bots</span></h1>
           <p class="tagline">Big robots, bigger lobs.</p>
+          <div class="hangar-art" aria-hidden="true">
+            <span class="hangar-index">LB / 01</span>
+            <canvas id="hero-mech"></canvas>
+            <span class="hangar-caption">LB-01 / Artillery platform <b>● Systems online</b></span>
+          </div>
         </header>
 
         <div class="setup-opts">
@@ -114,7 +120,7 @@
              ten seats is a lot of card on a phone. -->
         <div id="roster">
           <div class="roster-head">
-            <span class="label" id="lbl-seats">Lobbots</span>
+            <span class="label" id="lbl-seats">Your crew</span>
             <span id="seat-count" class="count">4</span>
             <div class="seat-tools" role="group" aria-labelledby="lbl-seats">
               <button
@@ -138,7 +144,7 @@
           <div id="seats"></div>
         </div>
 
-        <button type="button" id="deploy" class="primary">Deploy</button>
+        <button type="button" id="deploy" class="primary">Deploy crew <span aria-hidden="true">↗</span></button>
 
         <div class="screen-foot">
           <!--
@@ -197,6 +203,19 @@
           </div>
 
           <div id="shot-timer" hidden>0</div>
+
+          <!-- Shown only once every human walker is wrecked for the round:
+               the bots finish it at triple speed. Pressed = on; a tap
+               slows it back down for anyone who wants to watch. -->
+          <button
+            type="button"
+            id="turbo-btn"
+            hidden
+            aria-pressed="true"
+            title="You are out: the bots play on at triple speed. Tap for normal speed."
+          >
+            Turbo ×3
+          </button>
         </div>
 
         <div id="hud-bottom">
@@ -212,8 +231,8 @@
                 ◂
               </button>
               <span class="dial-read">
-                <b id="angle-val">45</b><span class="dial-unit">°</span>
-                <span class="dial-label">Angle</span>
+                <b id="angle-val">45</b><span class="dial-unit" id="angle-unit">°</span>
+                <span class="dial-label" id="angle-label">Angle</span>
               </span>
               <button
                 type="button"

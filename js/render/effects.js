@@ -26,6 +26,22 @@
  * SHAKE is amplitude-decaying and capped, and it is off entirely when
  * settings.shake is false — some people get motion sick, and Classic turns it
  * off on purpose.
+ *
+ * BIG THINGS ARE ALLOWED TO BE BIG, BRIEFLY
+ *   The Nuke's own description promises it is "visually unreasonable", so it
+ *   gets what nothing else does: a white-out over the whole field, a
+ *   shockwave ring that crosses most of the screen, and a mushroom cloud that
+ *   climbs and drifts with the wind. All three are short and all three fade,
+ *   because the rule above still holds — a few seconds later the player must
+ *   be able to see who is left. The flash is held to a soft tint under
+ *   prefers-reduced-motion (setCalm), where a full white frame is exactly the
+ *   thing that should not happen. Mushrooms are their own tiny preallocated
+ *   pool (they are one shape, not a cloud of particles), so a nuke chain
+ *   reaction cannot starve the smoke pool.
+ *
+ * DEATH BLASTS: a wreck cooking off throws hull plating in its own team
+ * colour on top of whatever explosion it rolled, so a chain reaction reads
+ * as "Ember's machine went up" and not just another crater.
  */
 
 const TAU = Math.PI * 2;
@@ -34,6 +50,7 @@ const K_SMOKE = 0;
 const K_DEBRIS = 1;
 const K_SPARK = 2;
 const K_DIRT = 3;
+const K_FLAME = 4;
 
 const POOL = 1400;
 const RINGS = 32;
@@ -49,6 +66,19 @@ const FLASH_CORE = '#ffe9b0';
 const FLASH_RING = '#ffc46a';
 const MOUND_RING = '#9b8466';
 const STREAK_COL = '#cfd8ee';
+const FLAME_HOT = '#fff1a8';
+const FLAME_MID = '#ffa23a';
+const FLAME_COOL = '#b8502e';
+const SHOCK_COL = '#fff6dc';
+const MUSH_SMOKE = ['#8a7f7a', '#6f6866', '#9b8f86'];
+const MUSH_HOT = '#ffb35c';
+const HULL_COLS = ['#2b2a31', '#5b6474', '#9aafbf'];
+
+/** Mushroom clouds alive at once, and the puffs that make each cap. */
+const MUSHES = 3;
+const MUSH_PUFFS = 16;
+const MUSH_STEM = 16;
+const MUSH_LIFE = 4.6;
 
 /** Shake never exceeds this many field px, whatever goes off. */
 const SHAKE_CAP = 15;
@@ -75,6 +105,18 @@ export function createEffects() {
     // `k` is a per-streak speed variation so the air is not a marching band.
     streaks[i] = { x: 0, y: 0, len: 10, speed: 0, k: 0.75 + Math.random() * 0.5, alpha: 0.1 };
   }
+
+  // Mushroom clouds: position, age, drift, and each cap puff's unit offset
+  // and radius, rolled once at spawn so the shape holds still as it rises.
+  const mushes = new Array(MUSHES);
+  for (let i = 0; i < MUSHES; i++) {
+    mushes[i] = { live: false, x: 0, y: 0, t: 0, drift: 0, scale: 1, puffs: new Float32Array(MUSH_PUFFS * 3) };
+  }
+  let mushCursor = 0;
+
+  // The white-out, field-wide; 0 when nothing is flashing.
+  let flash = 0;
+  let calm = false;
 
   // The view rectangle the streaks live in; render.js keeps it current.
   const bounds = { x0: 0, y0: 0, x1: 1600, y1: 560 };
@@ -147,6 +189,36 @@ export function createEffects() {
     p.col = SPARK_COLS[(Math.random() * SPARK_COLS.length) | 0];
   }
 
+  function flame(x, y, vx, vy, size, life) {
+    const p = take();
+    p.kind = K_FLAME;
+    p.x = x; p.y = y; p.vx = vx; p.vy = vy;
+    p.size = size;
+    p.grow = -size * 0.6;   // licks shrink as they burn out
+    p.life = life; p.max = life;
+    p.g = -90;              // flame climbs
+    p.drag = 1.6;
+    p.wind = 0.6;
+    p.alpha = 0.9;
+    p.col = FLAME_HOT;
+  }
+
+  function mushroom(x, y, scale) {
+    const m = mushes[mushCursor];
+    mushCursor = (mushCursor + 1) % MUSHES;
+    m.live = true;
+    m.x = x; m.y = y; m.t = 0; m.drift = 0; m.scale = scale;
+    const pf = m.puffs;
+    for (let i = 0; i < MUSH_PUFFS; i++) {
+      // A flattened dome: wider than tall, heavier at the rim.
+      const a = Math.PI + (i / (MUSH_PUFFS - 1)) * Math.PI;
+      const rr = 0.55 + Math.random() * 0.45;
+      pf[i * 3] = Math.cos(a) * rr * 1.25;
+      pf[i * 3 + 1] = Math.sin(a) * rr * 0.55 + 0.1;
+      pf[i * 3 + 2] = 0.32 + Math.random() * 0.22;
+    }
+  }
+
   function ring(x, y, r0, r1, dur, lw, core, ringCol, coreCol) {
     const r = rings[ringCursor];
     ringCursor = (ringCursor + 1) % RINGS;
@@ -185,6 +257,9 @@ export function createEffects() {
       }
     },
 
+    /** Reduced motion: no full white frame, ever. render.js keeps it current. */
+    setCalm(on) { calm = !!on; },
+
     setShake(on) {
       shakeOn = !!on;
       if (!on) { shakeAmp = 0; shake.x = 0; shake.y = 0; }
@@ -194,6 +269,8 @@ export function createEffects() {
     reset() {
       for (let i = 0; i < POOL; i++) pool[i].live = false;
       for (let i = 0; i < RINGS; i++) rings[i].live = false;
+      for (let i = 0; i < MUSHES; i++) mushes[i].live = false;
+      flash = 0;
       shakeAmp = 0;
       shake.x = 0;
       shake.y = 0;
@@ -205,8 +282,10 @@ export function createEffects() {
     /**
      * A blast. `radius` is the weapon's, `strength` its 0..1 shake weight,
      * `mound` true for a dirt bomb, which throws earth instead of fire.
+     * `weaponId` picks the extras: flame licks for fuel, the full works for
+     * the Nuke.
      */
-    explosion(x, y, radius, strength, mound) {
+    explosion(x, y, radius, strength, mound, weaponId) {
       const r = Math.max(6, radius);
       if (mound) {
         // Dirt bomb: a dull brown ring, a fat splat of earth, no flash. The
@@ -240,7 +319,9 @@ export function createEffects() {
           0.2 + Math.random() * 0.08);
       }
 
-      const debrisN = Math.min(18, 4 + ((r * 0.18) | 0));
+      // Debris scales with the hole; the cap rises for the really big ones
+      // so a Mega reads heavier than a Heavy, and a Nuke heavier still.
+      const debrisN = Math.min(r > 100 ? 34 : 22, 4 + ((r * 0.22) | 0));
       for (let i = 0; i < debrisN; i++) {
         const a = -Math.PI * (0.15 + Math.random() * 0.7); // thrown upward
         const sp = r * (2.2 + Math.random() * 3.2);
@@ -254,7 +335,103 @@ export function createEffects() {
         spark(x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.22 + Math.random() * 0.22);
       }
 
+      if (weaponId === 'fire' || weaponId === 'napalm') {
+        // Burning fuel: licks that climb and lean with the wind, and a few
+        // slower ones that sit on the ground a moment, so a napalm splash
+        // looks like it is still burning after the bangs.
+        const n = weaponId === 'napalm' ? 14 : 7;
+        for (let i = 0; i < n; i++) {
+          flame(x + (Math.random() - 0.5) * r * 1.2, y - Math.random() * 4,
+            (Math.random() - 0.5) * 70, -40 - Math.random() * 90,
+            3 + Math.random() * 4, 0.35 + Math.random() * 0.5);
+        }
+        for (let i = 0; i < 4; i++) {
+          flame(x + (Math.random() - 0.5) * r, y - 1, (Math.random() - 0.5) * 12, -8,
+            2.5 + Math.random() * 2, 0.9 + Math.random() * 0.6);
+        }
+      } else if (weaponId === 'volcano' || weaponId === 'lava-rock') {
+        for (let i = 0; i < 5; i++) {
+          flame(x + (Math.random() - 0.5) * r * 0.6, y, (Math.random() - 0.5) * 50, -60 - Math.random() * 60,
+            2.5 + Math.random() * 2.5, 0.3 + Math.random() * 0.3);
+        }
+      }
+
+      if (weaponId === 'nuke') {
+        // The works. White-out, a shockwave across most of the field, a
+        // second warm ring behind it, a fireball, and the mushroom.
+        flash = 1;
+        ring(x, y, r * 0.3, r * 3.8, 1.25, 7, 0, SHOCK_COL, SHOCK_COL);
+        ring(x, y, r * 0.2, r * 2.2, 0.9, 10, r * 0.9, FLASH_RING, FLASH_CORE);
+        mushroom(x, y, r / 150);
+        for (let i = 0; i < 18; i++) {
+          const a = -Math.PI * Math.random();
+          const sp = r * (0.8 + Math.random() * 1.6);
+          flame(x + Math.cos(a) * r * 0.3, y + Math.sin(a) * r * 0.2,
+            Math.cos(a) * sp, Math.sin(a) * sp * 0.8, 6 + Math.random() * 6, 0.5 + Math.random() * 0.5);
+        }
+      } else if (r >= 56) {
+        // Mega and friends: a second, wider pressure ring.
+        ring(x, y, r * 0.5, r * 2, 0.5, 3, 0, SHOCK_COL, SHOCK_COL);
+      }
+
       addShake(strength);
+    },
+
+    /**
+     * A wreck cooking off: plating in the dead mech's colour flung wide, plus
+     * a hot ring. Drawn on top of the explosion the death blast rolled.
+     */
+    deathBlast(x, y, hex) {
+      ring(x, y - 14, 10, 90, 0.5, 5, 26, FLASH_RING, FLASH_CORE);
+      for (let i = 0; i < 16; i++) {
+        const a = -Math.PI * (0.05 + Math.random() * 0.9);
+        const sp = 180 + Math.random() * 360;
+        const p = take();
+        p.kind = K_DEBRIS;
+        p.x = x; p.y = y - 16; p.vx = Math.cos(a) * sp; p.vy = Math.sin(a) * sp;
+        p.size = 2.5 + Math.random() * 4;
+        p.life = 1 + Math.random() * 0.9; p.max = p.life;
+        p.g = 900; p.drag = 0.08; p.wind = 0.08;
+        p.rot = Math.random() * TAU;
+        p.spin = (Math.random() * 2 - 1) * 12;
+        p.alpha = 1;
+        p.col = i % 3 === 0 ? HULL_COLS[(Math.random() * HULL_COLS.length) | 0] : hex;
+      }
+      for (let i = 0; i < 6; i++) {
+        flame(x + (Math.random() - 0.5) * 20, y - 14, (Math.random() - 0.5) * 80, -60 - Math.random() * 80,
+          4 + Math.random() * 4, 0.4 + Math.random() * 0.4);
+      }
+      addShake(0.3);
+    },
+
+    /** A wreck's dead wiring arcing now and then. */
+    wreckSpark(x, y) {
+      const n = 2 + ((Math.random() * 3) | 0);
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI * (0.15 + Math.random() * 0.7);
+        const sp = 50 + Math.random() * 120;
+        spark(x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.15 + Math.random() * 0.2);
+      }
+    },
+
+    /**
+     * A wreck about to blow: sparks spat from the hole, more as `k` (0..1,
+     * how close it is) climbs. Gated on dt, so frame-rate free.
+     */
+    cookOff(x, y, k, dt) {
+      if (Math.random() > dt * (6 + k * 40)) return;
+      const a = -Math.PI * (0.1 + Math.random() * 0.8);
+      const sp = 80 + Math.random() * (160 + k * 240);
+      spark(x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.2 + Math.random() * 0.25);
+      if (k > 0.5 && Math.random() < 0.3) {
+        flame(x + (Math.random() - 0.5) * 6, y, (Math.random() - 0.5) * 20, -50, 2.5 + k * 2, 0.3);
+      }
+    },
+
+    /** A footfall on the march: a little scuff of dust behind the foot. */
+    footDust(x, y, dir) {
+      smoke(x - dir * 3, y - 1, -dir * (20 + Math.random() * 30), -10 - Math.random() * 16,
+        2.6 + Math.random() * 1.6, 0.35 + Math.random() * 0.2, 0.14);
     },
 
     /** The muzzle: a short cone of fire where the shell left the barrel. */
@@ -407,6 +584,20 @@ export function createEffects() {
         if (r.t >= r.dur) r.live = false;
       }
 
+      for (let i = 0; i < MUSHES; i++) {
+        const m = mushes[i];
+        if (!m.live) continue;
+        m.t += dt;
+        // The cloud is high and slow; the wind moves it, gently and late.
+        m.drift += wind * 0.35 * Math.min(1, m.t / 1.5) * dt;
+        if (m.t >= MUSH_LIFE) m.live = false;
+      }
+
+      if (flash > 0) {
+        flash -= dt / 0.7;
+        if (flash < 0) flash = 0;
+      }
+
       // Streaks. Speed eases toward the current wind rather than snapping to
       // it, so a wind change per turn reads as the air turning round.
       if (wind !== 0) {
@@ -455,6 +646,15 @@ export function createEffects() {
             ctx.arc(p.x, p.y, p.size, 0, TAU);
             ctx.fill();
             break;
+          case K_FLAME:
+            // White-yellow when fresh, orange, then a dull red as it dies.
+            // Fades as it cools: a spent lick must not hang about as a red dot.
+            ctx.globalAlpha = p.alpha * (k > 0.5 ? 1 : k * 2);
+            ctx.fillStyle = k > 0.66 ? FLAME_HOT : k > 0.33 ? FLAME_MID : FLAME_COOL;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size > 0.4 ? p.size : 0.4, 0, TAU);
+            ctx.fill();
+            break;
           case K_SPARK:
             ctx.globalAlpha = k;
             ctx.fillStyle = p.col;
@@ -498,8 +698,76 @@ export function createEffects() {
         }
       }
       ctx.globalAlpha = 1;
+
+      for (let i = 0; i < MUSHES; i++) {
+        const m = mushes[i];
+        if (m.live) drawMushroom(ctx, m);
+      }
+
+      if (flash > 0) {
+        ctx.globalAlpha = (calm ? 0.25 : 0.85) * flash * flash;
+        ctx.fillStyle = '#fffbea';
+        ctx.fillRect(-2000, -2000, 5600, 4900);
+        ctx.globalAlpha = 1;
+      }
     },
   };
+
+  /**
+   * One mushroom: a stem of stacked puffs from the ground to the cap, and the
+   * dome of puffs rolled at spawn. It rises on an ease-out, the cap swells as
+   * it goes, it is hot orange at the start and cools to smoke, and it fades
+   * over its last third. Peak alpha is held low on purpose: it is a moment,
+   * not a curtain.
+   */
+  function drawMushroom(ctx, m) {
+    const s = m.scale;
+    const k = m.t / MUSH_LIFE;
+    const rise = 1 - Math.pow(1 - Math.min(1, m.t / 2.2), 3);
+    const capY = m.y - (50 + 160 * rise) * s;
+    const capX = m.x + m.drift;
+    const capR = (50 + 55 * rise) * s;
+    const fade = m.t < 0.2 ? m.t / 0.2 : k > 0.62 ? (1 - k) / 0.38 : 1;
+    const hot = m.t < 1.6 ? 1 - m.t / 1.6 : 0;
+
+    // Stem: narrows toward the top, leans with the drift.
+    for (let i = 0; i < MUSH_STEM; i++) {
+      const u = i / (MUSH_STEM - 1);
+      const sx = m.x + m.drift * u * u;
+      const sy = m.y + (capY - m.y) * u;
+      // Overlapping heavily, and wobbling a little, so it reads as one
+      // column of smoke and not a string of beads.
+      const sr = (30 - 14 * u + Math.sin(i * 2.3) * 3) * s * (0.6 + 0.4 * rise);
+      ctx.globalAlpha = 0.42 * fade;
+      ctx.fillStyle = MUSH_SMOKE[i % 3];
+      ctx.beginPath(); ctx.arc(sx, sy, sr, 0, TAU); ctx.fill();
+      if (hot > 0) {
+        ctx.globalAlpha = 0.5 * fade * hot;
+        ctx.fillStyle = MUSH_HOT;
+        ctx.beginPath(); ctx.arc(sx, sy, sr * 0.6, 0, TAU); ctx.fill();
+      }
+    }
+    // Cap.
+    const pf = m.puffs;
+    for (let i = 0; i < MUSH_PUFFS; i++) {
+      const px = capX + pf[i * 3] * capR;
+      const py = capY + pf[i * 3 + 1] * capR;
+      const pr = pf[i * 3 + 2] * capR;
+      ctx.globalAlpha = 0.5 * fade;
+      ctx.fillStyle = MUSH_SMOKE[i % 3];
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, TAU); ctx.fill();
+    }
+    if (hot > 0) {
+      for (let i = 0; i < MUSH_PUFFS; i += 2) {
+        const px = capX + pf[i * 3] * capR * 0.8;
+        const py = capY + pf[i * 3 + 1] * capR * 0.8 + capR * 0.12;
+        ctx.globalAlpha = 0.6 * fade * hot;
+        ctx.fillStyle = i % 4 ? MUSH_HOT : FLAME_HOT;
+        ctx.beginPath(); ctx.arc(px, py, pf[i * 3 + 2] * capR * 0.6, 0, TAU); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
 
   function addShake(strength) {
     if (!shakeOn || !(strength > 0)) return;

@@ -42,8 +42,7 @@ const CRUST_LINE = '#a79f8a';
 const BEDROCK_FILL = '#191920';
 const BEDROCK_LINE = '#2f2b35';
 
-/** Two fixed strings so the per-column grain costs no allocation. */
-const GRAIN_LIGHT = '#ffffff';
+/** Shadow on an exposed tunnel ceiling. */
 const GRAIN_DARK = '#000000';
 
 export function createTerrainLayer() {
@@ -52,12 +51,18 @@ export function createTerrainLayer() {
   canvas.height = HEIGHT;
   const c = canvas.getContext('2d');
 
-  // Per-column grain, generated once. Without it a crater rim is a perfect
-  // arc of flat colour and the ground looks like paper.
-  const grain = new Float32Array(WIDTH);
-  for (let x = 0; x < WIDTH; x++) {
-    grain[x] = (Math.random() * 2 - 1) * (0.5 + Math.random() * 0.5);
+  // A baked, mottled rock texture instead of full-height vertical grain.
+  // Absolute coordinates keep the texture stable when a crater is repainted.
+  const rock = document.createElement('canvas');
+  rock.width = rock.height = 128;
+  const rc = rock.getContext('2d');
+  for (let i = 0; i < 850; i++) {
+    const x = (i * 73) % 128;
+    const y = (i * 37 + Math.floor(i / 11) * 17) % 128;
+    rc.fillStyle = i % 3 ? '#080d1618' : '#d2c5ac12';
+    rc.fillRect(x, y, 2 + i % 7, 1 + i % 3);
   }
+  const rockPattern = c.createPattern(rock, 'repeat');
 
   const strata = c.createLinearGradient(0, 0, 0, HEIGHT);
   // Stop pairs sitting close together are seams; everything else is a slow
@@ -98,14 +103,11 @@ export function createTerrainLayer() {
       c.fillStyle = strata;
       c.fillRect(x, top, 1, h);
 
-      // Grain: one translucent pass per column, lighter or darker.
-      const g = grain[x];
-      if (g !== 0) {
-        c.globalAlpha = Math.abs(g) * 0.07;
-        c.fillStyle = g > 0 ? GRAIN_LIGHT : GRAIN_DARK;
-        c.fillRect(x, top, 1, h);
-        c.globalAlpha = 1;
-      }
+      c.fillStyle = rockPattern;
+      c.fillRect(x, top, 1, h);
+      // A darker undercut makes the lit rim feel thick, even at small scale.
+      c.fillStyle = '#10151e38';
+      c.fillRect(x, top + 4, 1, Math.min(8, Math.max(0, h - 4)));
 
       // Every span top is a surface — there is air above it by construction —
       // so every one of them gets the crust. This is what makes a bright

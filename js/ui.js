@@ -10,7 +10,7 @@
  *
  * Three habits run through the whole file.
  *
- * THE PANELS BELONG TO LOBBOTS. Dark riveted plate, hazard stripes, condensed
+ * THE PANELS BELONG TO LOBBOTS. Graphite panels, cool accent lights, condensed
  * uppercase, and the battlefield showing through the glass — because a panel
  * that would look the same over a white page is not finished (hub §2). There
  * is no bare <select> anywhere; a choice is a row of real buttons carrying
@@ -116,7 +116,7 @@ function boltAmount(n, word) {
 // turns to grey mush there.
 // ---------------------------------------------------------------------------
 
-const HAZ = '#ffd23f';
+const HAZ = '#a7d9e8';
 const TXT = '#eef0f4';
 const DIM = '#9aa3b2';
 const RED = '#ff4b3e';
@@ -167,6 +167,30 @@ function ground(ctx, y) {
 }
 
 const PAINT = {
+  /**
+   * Move: two footprints under a two-way arrow. Not a gun, and the icon
+   * should say so at a glance — no shell silhouette anywhere near it.
+   */
+  move(ctx) {
+    ground(ctx, 34);
+    ctx.fillStyle = TXT;
+    ctx.fillRect(6, 27, 11, 5);
+    ctx.fillRect(23, 27, 11, 5);
+    ctx.fillStyle = DIM;
+    for (const x of [7, 11, 15, 24, 28, 32]) ctx.fillRect(x - 1, 32, 2, 2);
+    ctx.strokeStyle = HAZ;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(8, 15);
+    ctx.lineTo(32, 15);
+    ctx.stroke();
+    ctx.fillStyle = HAZ;
+    ctx.beginPath();
+    ctx.moveTo(3, 15); ctx.lineTo(11, 8); ctx.lineTo(11, 22); ctx.closePath();
+    ctx.moveTo(37, 15); ctx.lineTo(29, 8); ctx.lineTo(29, 22); ctx.closePath();
+    ctx.fill();
+  },
+
   shell: (ctx) => shellShape(ctx, 5, 1),
   'shell-heavy': (ctx) => shellShape(ctx, 7, 2),
   'shell-mega': (ctx) => shellShape(ctx, 9, 3),
@@ -466,6 +490,7 @@ function attachHold(btn, emit) {
 // ---------------------------------------------------------------------------
 
 export function createUI(callbacks = {}) {
+  if (callbacks.paintPortrait) callbacks.paintPortrait($('hero-mech'), '#a7d9e8', true);
   const cb = {
     onStart() {},
     onAngle() {},
@@ -478,6 +503,7 @@ export function createUI(callbacks = {}) {
     onResume() {},
     onQuit() {},
     onVolume() {},
+    onTurbo() {},
     ...callbacks,
   };
 
@@ -524,10 +550,18 @@ export function createUI(callbacks = {}) {
   const windBar = $('wind-bar');
   const windHead = $('wind-head');
   const shotTimer = $('shot-timer');
+  const turboBtn = $('turbo-btn');
+  turboBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    cb.onTurbo();
+  });
   const angleVal = $('angle-val');
+  const angleUnit = $('angle-unit');
+  const angleLabel = $('angle-label');
   const powerVal = $('power-val');
   const weaponsBox = $('weapons');
   const fireBtn = $('fire-btn');
+  const powerDial = $('power-val').closest('.dial');
 
   // Scoreboard / shop / match over / pause
   const sbTitle = $('sb-title');
@@ -781,13 +815,17 @@ export function createUI(callbacks = {}) {
     sw.type = 'button';
     sw.title = `${color.name} — tap for another colour`;
     sw.setAttribute('aria-label', `Colour: ${color.name}. Tap for another.`);
-    sw.appendChild(el('i', 'swatch'));
+    const portrait = el('canvas', 'mech-portrait');
+    portrait.setAttribute('aria-hidden', 'true');
+    sw.appendChild(portrait);
+    if (callbacks.paintPortrait) callbacks.paintPortrait(portrait, color.hex);
     sw.addEventListener('click', (e) => {
       e.stopPropagation();
       const wasAuto = seat.autoName;
       seat.colorIndex = freeColor(seat.colorIndex, i);
       const c = PALETTE[seat.colorIndex];
       card.style.setProperty('--c', c.hex);
+      if (callbacks.paintPortrait) callbacks.paintPortrait(portrait, c.hex);
       sw.title = `${c.name} — tap for another colour`;
       sw.setAttribute('aria-label', `Colour: ${c.name}. Tap for another.`);
       // A name nobody has typed follows its colour around.
@@ -924,7 +962,11 @@ export function createUI(callbacks = {}) {
     rounds: -1,
     timer: -1,
     locked: null,
+    moving: null,
+    walk: NaN,
   };
+  /** Move is selected: the angle dial reads the walk, power is idle. */
+  let moveMode = false;
 
   let weaponButtons = [];
   let controlsLocked = false;
@@ -951,6 +993,8 @@ export function createUI(callbacks = {}) {
     seen.round = -1;
     seen.rounds = -1;
     seen.timer = -1;
+    seen.moving = null;
+    seen.walk = NaN;
     rebuildStrip = true;
   }
 
@@ -1081,10 +1125,37 @@ export function createUI(callbacks = {}) {
     // ---- aim -------------------------------------------------------------
     // The AI's angle and power are floats mid-swing; the player reads whole
     // numbers, so round for display and never for the sim.
-    const ang = Math.round(p.angle ?? 0);
-    if (ang !== seen.angle) {
-      seen.angle = ang;
-      setText(angleVal, ang);
+    // With Move in hand the same ◂ ▸ dial walks the marker instead of
+    // swinging the barrel (main.js does the translating), so the dial says
+    // how far and which way, power goes quiet, and FIRE becomes WALK. One
+    // set of controls, two meanings, and the labels never lie about which.
+    const moving = p.weaponId === 'move';
+    if (moving !== seen.moving) {
+      seen.moving = moving;
+      moveMode = moving;
+      seen.angle = -1;
+      seen.walk = NaN;
+      setText(angleLabel, moving ? 'Walk' : 'Angle');
+      setText(angleUnit, moving ? '' : '°');
+      setText(fireBtn, moving ? 'Walk' : 'Fire');
+      const [left, right] = hudBottom.querySelectorAll('.pill.step[data-axis="angle"]');
+      if (left) left.setAttribute('aria-label', moving ? 'Walk target left' : 'Swing barrel left');
+      if (right) right.setAttribute('aria-label', moving ? 'Walk target right' : 'Swing barrel right');
+      powerDial.classList.toggle('off', moving);
+      applyLock();
+    }
+    if (moving) {
+      const walk = m && p.moveX !== null ? Math.round(p.moveX - m.x) : 0;
+      if (walk !== seen.walk) {
+        seen.walk = walk;
+        setText(angleVal, walk === 0 ? '0' : walk < 0 ? `◂${-walk}` : `${walk}▸`);
+      }
+    } else {
+      const ang = Math.round(p.angle ?? 0);
+      if (ang !== seen.angle) {
+        seen.angle = ang;
+        setText(angleVal, ang);
+      }
     }
     const pow = Math.round(p.power ?? 0);
     if (pow !== seen.power) {
@@ -1132,8 +1203,14 @@ export function createUI(callbacks = {}) {
     controlsLocked = !!locked;
     if (seen.locked === controlsLocked) return;
     seen.locked = controlsLocked;
+    applyLock();
+  }
+
+  function applyLock() {
     hudBottom.classList.toggle('locked', controlsLocked);
-    for (const pill of hudBottom.querySelectorAll('.pill.step')) pill.disabled = controlsLocked;
+    for (const pill of hudBottom.querySelectorAll('.pill.step')) {
+      pill.disabled = controlsLocked || (moveMode && pill.dataset.axis === 'power');
+    }
     fireBtn.disabled = controlsLocked;
     for (const w of weaponButtons) w.btn.disabled = controlsLocked;
   }
@@ -1463,6 +1540,13 @@ export function createUI(callbacks = {}) {
     },
     updateHud,
     lockControls,
+
+    /** Turbo: `available` once every human is out, `on` while it runs. */
+    setTurbo(available, on) {
+      turboBtn.hidden = !available;
+      turboBtn.setAttribute('aria-pressed', String(!!on));
+      turboBtn.setAttribute('aria-label', on ? 'Turbo on, triple speed' : 'Turbo off, normal speed');
+    },
 
     showScoreboard,
     showShop,

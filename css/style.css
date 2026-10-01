@@ -1,9 +1,7 @@
 /*
  * style.css — everything the player reads, in the game's own materials.
  *
- * LOBBOTS looks like the yard the walkers came out of: dark riveted plate,
- * hazard stripes on anything that is about to happen, and condensed uppercase
- * stencilling. Nothing here is generic, because a menu that would look the
+ * LOBBOTS uses graphite panels, cool accent lighting and crisp typography. Nothing here is generic, because a menu that would look the
  * same over a white page tells the player they are configuring software
  * rather than playing something (hub CLAUDE.md §2). Three consequences run
  * through the file:
@@ -37,15 +35,15 @@
   --edge: #3a414d;
   --text: #eef0f4;
   --muted: #9aa3b2;
-  --hazard: #ffd23f;
+  --accent: #a7d9e8;
   --danger: #ff4b3e;
   --ok: #4fd66b;
   --coolant: #3fe0e0;
 
   /* The player colour of whatever this element belongs to. ui.js overrides
-     it per row, per seat, per HUD; hazard is the house colour when nobody
+     it per row, per seat, per HUD; ice blue is the house colour when nobody
      owns the element. */
-  --c: var(--hazard);
+  --c: var(--accent);
 
   --head: "Arial Narrow", "Helvetica Neue Condensed", "Roboto Condensed",
     "Liberation Sans Narrow", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -127,10 +125,10 @@ h2 {
 h1 {
   font-size: clamp(34px, 9vw, 54px);
   color: var(--text);
-  /* The stencil: a hazard shadow under the letters, not around them. */
+  /* A restrained highlight separates the title from the dark panel. */
   text-shadow:
     0 2px 0 rgba(0, 0, 0, 0.6),
-    0 0 26px rgba(255, 210, 63, 0.25);
+    0 0 26px rgba(167, 217, 232, 0.25);
 }
 h2 {
   font-size: clamp(20px, 5vw, 27px);
@@ -138,7 +136,7 @@ h2 {
 
 .kicker {
   margin: 0 0 3px;
-  color: var(--hazard);
+  color: var(--accent);
   font-size: 10px;
   letter-spacing: 0.24em;
   text-transform: uppercase;
@@ -180,7 +178,7 @@ h2 {
   -webkit-backdrop-filter: blur(9px) saturate(1.1);
 }
 
-/* The hazard band along the top of every panel. Decorative and aria-hidden. */
+/* Fine illuminated seam along each panel. Decorative and aria-hidden. */
 .plate-strip {
   position: absolute;
   left: 0;
@@ -188,11 +186,7 @@ h2 {
   top: 0;
   height: 6px;
   border-radius: 13px 13px 0 0;
-  background: repeating-linear-gradient(
-    115deg,
-    var(--hazard) 0 13px,
-    #191d24 13px 26px
-  );
+  background: linear-gradient(90deg, transparent, #bad9e8a0 35%, #e4f4fa 50%, #bad9e8a0 65%, transparent);
   opacity: 0.85;
 }
 
@@ -261,14 +255,14 @@ button {
 }
 button:focus-visible,
 input:focus-visible {
-  outline: 2px solid var(--hazard);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 button:disabled {
   cursor: not-allowed;
 }
 
-/* The big one. A stamped hazard plate with a hard shadow under it, so it
+/* The big one. An illuminated control with a hard shadow under it, so it
    physically depresses when pressed. */
 .primary {
   width: 100%;
@@ -276,7 +270,7 @@ button:disabled {
   padding: 10px 18px;
   border: 0;
   border-radius: 12px;
-  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  background: linear-gradient(180deg, #e2eff5, #9dbfce);
   color: #15181e;
   font-family: var(--head);
   font-size: 20px;
@@ -284,7 +278,7 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.16em;
   box-shadow:
-    0 5px 0 #8a6712,
+    0 5px 0 #486679,
     0 14px 28px rgba(0, 0, 0, 0.45);
   transition:
     transform 0.06s,
@@ -296,7 +290,7 @@ button:disabled {
 }
 .primary:active {
   transform: translateY(4px);
-  box-shadow: 0 1px 0 #8a6712;
+  box-shadow: 0 1px 0 #486679;
 }
 
 .ghost {
@@ -382,13 +376,13 @@ button:disabled {
   background: rgba(58, 65, 77, 0.8);
 }
 .seg button[aria-pressed="true"] {
-  background: linear-gradient(180deg, #ffdf63, #e7b528);
+  background: linear-gradient(180deg, #e2eff5, #a7cbdc);
   border-color: transparent;
   color: #15181e;
   font-weight: 800;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.25),
-    0 4px 16px rgba(255, 210, 63, 0.22);
+    0 4px 16px rgba(167, 217, 232, 0.22);
 }
 .seg button:disabled {
   opacity: 0.35;
@@ -420,8 +414,8 @@ button:disabled {
   line-height: 1;
 }
 .pill:hover {
-  border-color: var(--hazard);
-  color: var(--hazard);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .pill:active {
   transform: translateY(1px);
@@ -465,7 +459,7 @@ button:disabled {
 /*
  * The volume slider. Both vendor pseudo-elements are written out because
  * there is no shared selector for them: the track is a cut channel, the thumb
- * a hazard-yellow shuttle.
+ * a silver shuttle.
  */
 .slider {
   flex: 1 1 auto;
@@ -487,7 +481,7 @@ button:disabled {
   touch-action: pan-y;
 }
 .slider input[type="range"]:focus-visible {
-  outline: 2px solid var(--hazard);
+  outline: 2px solid var(--accent);
   outline-offset: 4px;
   border-radius: 999px;
 }
@@ -510,23 +504,23 @@ button:disabled {
   height: 26px;
   margin-top: -10px;
   border-radius: 5px;
-  border: 1px solid #8a6712;
-  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  border: 1px solid #486679;
+  background: linear-gradient(180deg, #e2eff5, #9dbfce);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 .slider input[type="range"]::-moz-range-thumb {
   width: 20px;
   height: 26px;
   border-radius: 5px;
-  border: 1px solid #8a6712;
-  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  border: 1px solid #486679;
+  background: linear-gradient(180deg, #e2eff5, #9dbfce);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 .slider output {
   flex: 0 0 44px;
   text-align: right;
   font-weight: 800;
-  color: var(--hazard);
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -575,7 +569,7 @@ button:disabled {
   font-family: var(--head);
   font-size: 20px;
   font-weight: 800;
-  color: var(--hazard);
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 .seat-tools {
@@ -656,14 +650,14 @@ button:disabled {
   display: block;
   width: 100%;
   padding: 9px 12px;
-  border: 1px dashed var(--hazard);
+  border: 1px dashed var(--accent);
   border-radius: 10px;
-  background: rgba(255, 210, 63, 0.1);
+  background: rgba(167, 217, 232, 0.1);
   color: var(--text);
   text-align: center;
 }
 #update:hover {
-  background: rgba(255, 210, 63, 0.18);
+  background: rgba(167, 217, 232, 0.18);
 }
 .update-title {
   display: block;
@@ -672,7 +666,7 @@ button:disabled {
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--hazard);
+  color: var(--accent);
 }
 .update-sub {
   display: block;
@@ -785,7 +779,7 @@ button:disabled {
   transition: width 0.2s linear;
 }
 #hp-bar.mid #hp-fill {
-  background: linear-gradient(180deg, #ffe27a, var(--hazard));
+  background: linear-gradient(180deg, #d7eff7, var(--accent));
 }
 #hp-bar.low #hp-fill {
   background: linear-gradient(180deg, #ff7a70, var(--danger));
@@ -845,7 +839,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  color: var(--hazard);
+  color: var(--accent);
 }
 #wind.west #wind-arrow {
   flex-direction: row-reverse;
@@ -871,7 +865,37 @@ button:disabled {
   font-size: 22px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--hazard);
+  color: var(--accent);
+}
+/* The one tappable thing in the top strip, and only while you are out:
+   nothing to aim then, so the drag area it takes is not missed. */
+#turbo-btn {
+  margin-left: auto;
+  pointer-events: auto;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: rgba(21, 24, 30, 0.8);
+  color: var(--muted);
+  font-family: var(--head);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+#turbo-btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px rgba(167, 217, 232, 0.25);
+}
+#turbo-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+#turbo-btn[hidden] {
+  display: none;
 }
 #shot-timer.urgent {
   color: var(--danger);
@@ -932,6 +956,10 @@ button:disabled {
   font-size: 13px;
   color: var(--muted);
 }
+/* Power has nothing to say while Move is selected (ui.js applyLock). */
+.dial.off {
+  opacity: 0.35;
+}
 .dial-label {
   flex: 0 0 100%;
   margin-top: 4px;
@@ -985,9 +1013,9 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 .weapon[aria-pressed="true"] {
-  border-color: var(--hazard);
-  background: rgba(255, 210, 63, 0.16);
-  box-shadow: inset 0 0 0 1px var(--hazard);
+  border-color: var(--accent);
+  background: rgba(167, 217, 232, 0.16);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .weapon[aria-pressed="true"] .w-name {
   color: var(--text);
@@ -1001,7 +1029,7 @@ button:disabled {
   padding: 10px 20px;
   border: 0;
   border-radius: 12px;
-  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  background: linear-gradient(180deg, #e2eff5, #9dbfce);
   color: #15181e;
   font-family: var(--head);
   font-size: 24px;
@@ -1009,7 +1037,7 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.18em;
   box-shadow:
-    0 5px 0 #8a6712,
+    0 5px 0 #486679,
     0 12px 26px rgba(0, 0, 0, 0.5);
   transition:
     transform 0.06s,
@@ -1017,7 +1045,7 @@ button:disabled {
 }
 #fire-btn:active {
   transform: translateY(4px);
-  box-shadow: 0 1px 0 #8a6712;
+  box-shadow: 0 1px 0 #486679;
 }
 #fire-btn:disabled {
   filter: grayscale(0.7);
@@ -1063,7 +1091,7 @@ button:disabled {
   font-family: var(--head);
   font-size: 18px;
   font-weight: 800;
-  color: var(--hazard);
+  color: var(--accent);
 }
 .earned .plus {
   color: var(--ok);
@@ -1119,8 +1147,8 @@ button:disabled {
   background: rgba(255, 75, 62, 0.16);
 }
 .tag.won {
-  color: var(--hazard);
-  background: rgba(255, 210, 63, 0.16);
+  color: var(--accent);
+  background: rgba(167, 217, 232, 0.16);
 }
 
 /* The currency mark and its number. */
@@ -1132,7 +1160,7 @@ button:disabled {
 .bolt {
   width: 12px;
   height: 12px;
-  fill: var(--hazard);
+  fill: var(--accent);
   flex: 0 0 auto;
 }
 .bolts b {
@@ -1176,7 +1204,7 @@ button:disabled {
   margin: 0;
   text-align: center;
   font-size: 13px;
-  color: var(--hazard);
+  color: var(--accent);
   min-height: 1.3em;
 }
 
@@ -1195,7 +1223,7 @@ button:disabled {
   height: 38px;
 }
 .shop-row.held {
-  border-color: rgba(255, 210, 63, 0.45);
+  border-color: rgba(167, 217, 232, 0.45);
 }
 .shop-row.poor {
   opacity: 0.55;
@@ -1233,7 +1261,7 @@ button:disabled {
   color: var(--muted);
 }
 .sr-owned {
-  color: var(--hazard);
+  color: var(--accent);
 }
 .buy {
   margin-top: 3px;
@@ -1241,7 +1269,7 @@ button:disabled {
   padding: 4px 16px;
   border: 0;
   border-radius: 9px;
-  background: linear-gradient(180deg, #ffdf63, #e3a915);
+  background: linear-gradient(180deg, #e2eff5, #9dbfce);
   color: #15181e;
   font-family: var(--head);
   font-size: 15px;
@@ -1269,8 +1297,8 @@ button:disabled {
   background: rgba(30, 35, 43, 0.6);
 }
 .mo-row.first {
-  border-color: var(--hazard);
-  box-shadow: 0 0 22px rgba(255, 210, 63, 0.18);
+  border-color: var(--accent);
+  box-shadow: 0 0 22px rgba(167, 217, 232, 0.18);
 }
 .place {
   font-family: var(--head);
@@ -1280,7 +1308,7 @@ button:disabled {
   text-align: center;
 }
 .mo-row.first .place {
-  color: var(--hazard);
+  color: var(--accent);
 }
 .mo-name {
   font-size: 15px;
@@ -1326,8 +1354,8 @@ button:disabled {
   -webkit-backdrop-filter: blur(6px);
 }
 .icon-button:hover {
-  border-color: var(--hazard);
-  color: var(--hazard);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .icon-button svg {
   width: 21px;
@@ -1350,8 +1378,8 @@ button:disabled {
   display: inline;
 }
 .icon-button[aria-pressed="true"] {
-  border-color: var(--hazard);
-  color: var(--hazard);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* ===================== the callout ===================== */
@@ -1644,6 +1672,354 @@ button:disabled {
   #callout {
     top: 14%;
     padding: 8px 18px;
+  }
+}
+
+/* Robotics lab finish: graphite, frosted silver and restrained lighting. */
+.panel {
+  border-color: #63738380;
+  background: radial-gradient(ellipse at 0 0, #46677838, transparent 65%),
+    linear-gradient(145deg, #24323eef, #141e29f5 60%, #101923f7);
+  box-shadow: inset 0 1px #cedbe52b, inset 0 -1px #0008,
+    0 28px 90px #040a12b3, 0 0 70px #6babc210;
+}
+
+.screen:not([hidden]) {
+  animation: panel-arrive 280ms ease-out both;
+}
+
+@keyframes panel-arrive {
+  from {
+    opacity: 0;
+    margin-top: 12px;
+  }
+  to {
+    opacity: 1;
+    margin-top: 0;
+  }
+}
+
+.plate-strip {
+  height: 1px;
+  opacity: 0.65;
+}
+
+#logo {
+  letter-spacing: -0.04em;
+  font-weight: 700;
+  font-style: normal;
+  font-size: clamp(42px, 8vw, 70px);
+  text-shadow: 0 2px 24px #b3dceb12;
+}
+
+#logo span {
+  color: var(--accent);
+}
+
+.hangar-kicker {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  color: #a8bec8;
+  font-size: 9px;
+}
+
+.hangar-kicker i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #86edcb;
+  box-shadow: 0 0 9px #86edcb;
+  animation: beacon 3s ease-in-out infinite;
+}
+
+@keyframes beacon {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.tagline {
+  color: #b7c6ce;
+}
+
+.hangar-art {
+  position: relative;
+  margin-top: 18px;
+  border-block: 1px solid #96b9c52b;
+  background: repeating-linear-gradient(0deg, transparent 0 27px, #91bcc707 27px 28px), repeating-linear-gradient(90deg, transparent 0 27px, #91bcc707 27px 28px);
+}
+
+#hero-mech {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 12px 10px #0004);
+}
+
+.hangar-index {
+  position: absolute;
+  top: 14px;
+  left: 10px;
+  font: 10px monospace;
+  letter-spacing: 2px;
+  color: #a6bac7;
+}
+
+.hangar-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 12px;
+  text-transform: uppercase;
+  font: 8px monospace;
+  letter-spacing: 1px;
+  color: #8ca3b2;
+}
+
+.hangar-caption b {
+  color: #8ce5be;
+  font-weight: 400;
+}
+
+.hangar-art::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 25%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #b9f5e52b, transparent);
+  animation: hangar-scan 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes hangar-scan {
+  50% {
+    transform: translateY(100px);
+    opacity: 0.2;
+  }
+}
+
+.seat {
+  background: linear-gradient(110deg, color-mix(in srgb, var(--c) 8%, #1a2733), #17222ddd);
+  border-color: #718b9e38;
+  border-left-color: color-mix(in srgb, var(--c) 60%, #263547);
+  box-shadow: inset 0 1px #ffffff08, 0 3px 7px #0002;
+  transition: border-color 160ms, background 160ms;
+}
+
+.seat:hover, .seat:focus-within {
+  border-top-color: #9aafc36b;
+  background-color: #2c3d49;
+}
+
+.swatch-btn {
+  width: 66px;
+  height: 54px;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--c) 18%, #152330), #101924);
+  border-color: color-mix(in srgb, var(--c) 35%, #344557);
+  overflow: hidden;
+}
+
+.mech-portrait {
+  width: 72px;
+  height: 54px;
+  transition: transform 180ms;
+  pointer-events: none;
+}
+
+.swatch-btn:hover .mech-portrait {
+  transform: translateY(-2px) rotate(-3deg);
+}
+
+.seat-name {
+  background: #080f1766;
+  border-color: #8197a326;
+  box-shadow: inset 0 2px 5px #0003;
+}
+
+.seg button {
+  border-color: #607a8d4d;
+  background: linear-gradient(#293948aa, #15202bcc);
+  box-shadow: inset 0 1px #ffffff06;
+}
+
+.seg button[aria-pressed="true"] {
+  background: linear-gradient(#d5e6f0, #aac9d9);
+  box-shadow: inset 0 1px #fff9, 0 1px 0 #4f6c82, 0 4px 12px #9dd5ec12;
+}
+
+.seg-pers button[aria-pressed="true"], .seg-kind button[aria-pressed="true"] {
+  color: #eaf3f7;
+  background: linear-gradient(#496071, #304454);
+  border-color: #9cb3c080;
+  box-shadow: inset 0 1px #ffffff20, 0 2px #080f16;
+}
+
+button {
+  transition: filter 140ms, transform 140ms, border-color 140ms, box-shadow 140ms;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(2px);
+  filter: brightness(0.93);
+}
+
+.primary, #fire-btn {
+  background: linear-gradient(165deg, #e5eff5, #c2d8e5 58%, #a2bfd1);
+  color: #192c3c;
+  border: 1px solid #dceaf3;
+  box-shadow: inset 0 1px #fff9, 0 1px 0 #526f82, 0 8px 24px #a2daeb12;
+  text-shadow: none;
+  letter-spacing: 0.12em;
+}
+
+.primary:hover, #fire-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: inset 0 1px #fff9, 0 1px 0 #526f82, 0 8px 30px #a2daeb22;
+}
+
+#deploy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: 22px;
+}
+
+#deploy span {
+  font-size: 26px;
+}
+
+#hud-bottom {
+  background: linear-gradient(#283746f2, #111d2af7);
+  border-top: 1px solid #91a6b655;
+  box-shadow: 0 -8px 35px #040a1340, inset 0 1px #ffffff0c;
+}
+
+.dial {
+  background: #0a15234d;
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.dial-read b {
+  color: #e0f4ff;
+  text-shadow: 0 0 15px #72c9ff55;
+}
+
+.weapon {
+  background: linear-gradient(#2a3d4e, #162331);
+  border-color: #708b9e55;
+}
+
+.weapon .wicon, .shop-row .wicon {
+  filter: drop-shadow(0 3px 2px #0008);
+}
+
+.shop-row, .sb-row, .mo-row {
+  background: linear-gradient(110deg, #2e415066, #15212b99);
+}
+
+#callout {
+  border-color: #95b9d04d;
+  background: linear-gradient(120deg, #233747f2, #111e2af2);
+  box-shadow: 0 16px 50px #0006, inset 3px 0 var(--accent);
+}
+
+@media (min-width: 960px) and (min-height: 620px) {
+  #setup {
+    width: min(1080px, calc(100% - 72px));
+    display: grid;
+    grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.15fr);
+    grid-template-areas: 'head roster' 'opts roster' 'deploy roster' 'foot roster';
+    gap: 20px 36px;
+    padding: 36px;
+    max-height: calc(100% - 64px);
+  }
+  #setup .screen-head {
+    grid-area: head;
+  }
+  #setup .setup-opts {
+    grid-area: opts;
+  }
+  #setup #roster {
+    grid-area: roster;
+    border-left: 1px solid #7995a333;
+    padding-left: 28px;
+  }
+  #setup #seats {
+    max-height: min(66vh, 590px);
+    flex: 1;
+  }
+  #setup #deploy {
+    grid-area: deploy;
+  }
+  #setup .screen-foot {
+    grid-area: foot;
+  }
+  #setup .screen-foot:has(.menu-tools:empty) {
+    display: none;
+  }
+  #setup .seg-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  #setup .seg-grid button {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 959px), (max-height: 619px) {
+  .hangar-art {
+    display: none;
+  }
+  .hangar-kicker {
+    margin-bottom: 5px;
+  }
+  #logo {
+    font-size: 42px;
+  }
+}
+
+@media (max-width: 460px) {
+  .swatch-btn {
+    width: 52px;
+  }
+  .mech-portrait {
+    width: 64px;
+    height: 48px;
+  }
+  .seat-head {
+    gap: 5px;
+  }
+  .seat-name {
+    padding-inline: 6px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  #setup {
+    height: calc(100% - 16px);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    align-content: stretch;
+  }
+  #setup #roster {
+    overflow: hidden;
+  }
+  #setup .setup-opts {
+    justify-content: center;
+    gap: 5px;
+  }
+  #setup #logo {
+    font-size: 32px;
+  }
+  #setup .hangar-kicker {
+    display: none;
+  }
+  #setup #deploy {
+    min-height: 44px;
   }
 }
 

@@ -101,9 +101,10 @@ both use it:
 
 ```js
 match.apply({ type: 'fire',  playerId, weaponId, angle, power, target })  // target: x for air strikes, mechId for homing
+match.apply({ type: 'move',  playerId, x })     // spend a Move walking toward x (FIRE with Move selected does the same)
 match.apply({ type: 'buy',   playerId, itemId })
 match.apply({ type: 'ready', playerId })        // done shopping / start round
-match.apply({ type: 'aim',   playerId, angle, power, weaponId })  // cosmetic: lets other screens see the barrel move
+match.apply({ type: 'aim',   playerId, angle, power, weaponId, moveX })  // cosmetic: lets other screens see the barrel move; moveX = walk target
 match.step(dt, events)                          // fixed dt, pushes events for the frame
 ```
 
@@ -123,6 +124,8 @@ shopClosed                    roundStart {round, rounds, seed, profile}
 matchOver {standings}         windChanged {wind}
 apex {id, x, y, weaponId, hidden}        the top of an arc; the whistle starts here
 shopDone {playerId, purchases}           timerExpired {playerId}
+walkStart {playerId, fromX, toX, dir}    walkEnd {playerId, x, y, blocked}
+deathBlast {id, weaponId, x, y}          a wreck cooking off; its explosion follows
 ```
 
 ### State machine (match.js)
@@ -186,13 +189,35 @@ The terrain never redraws itself in full during play.
 ## 5. Mechs
 
 A mech is `{ id, playerId, x, y, facing, angle, power, weaponId, health,
-shield, armour, alive, vy, tilt }`. It does not walk. `x` changes only if a
-future slide rule says so. Each step: find the ground under the footprint;
+shield, armour, alive, vy, tilt, walking, walkDir, walkDist, cookOff }`. It
+walks only on a Move turn (below); otherwise `x` never changes. Each step: find the ground under the footprint;
 if it is lower than the feet, fall with gravity; landing from more than
 `FALL_DAMAGE_FROM` px deals `FALL_DAMAGE_PER_PX` (jump jets will zero this
 later). `tilt` is the slope under the feet, for the renderer. A buried mech
 fires from inside the ground: the shell detonates at the muzzle and digs it
 out, which is the classic way out and costs the shooter some health.
+
+**Move** is the owner's own idea, not Tank Wars'. It is a shop item
+(`category: 'utility'`, in the weapon strip like a gun, never launched). With
+it selected the barrel controls walk a target marker up to `MOVE_RANGE` either
+side and FIRE reads WALK. The walk goes a whole px per step at `WALK_SPEED`,
+standing on the footprint's highest ground, and stops short at a climb steeper
+than `WALK_MAX_RISE` px/px, at a drop that would cost fall damage, or at
+another walker it would walk into. `world.walkStep()` is both the walk and
+`world.walkPreview()`, so the marker the player commits to is where the walker
+really stops. A walk that cannot take its first step is refused and costs
+nothing. The turn after a walk hands back the gun held before Move.
+
+**Death blasts**, as in the original. `kill()` queues a cook-off: after
+`COOKOFF_MIN..MAX` s the wreck goes up as one weapon drawn from the weighted
+`DEATH_BLASTS` table, nuke included. Ballistic-flight weapons go off in place
+through their own IMPACT (a cluster still scatters); special flights (MIRV,
+roller, bouncer, funky, burrower) are thrown up out of the wreck and fly as
+themselves. The blast is owned by the dead walker, so the self-damage and team
+rules read correctly, but `world.credit` pays its damage and any chain kills to
+whoever caused the death. Pending cook-offs keep the world from being quiet,
+so a round that is already decided waits for them (`match.roundEnding`).
+`settings.deathBlasts` turns it off.
 
 Hit test: circle of `MECH_RADIUS` at the body centre. Damage from an
 explosion of radius `R`, damage `D`, at distance `d` from that centre:
@@ -304,6 +329,7 @@ Controls, all leading to the same actions:
 | Power | `↑` `↓` | `−` `+` pills; or vertical drag on the field |
 | Weapon | `Q` `E` / `Tab` | weapon strip, tap to select |
 | Fire | `Space` `Enter` | big FIRE button |
+| Walk (Move selected) | `←` `→` move the marker, `Space` walks | ◂ ▸ pills or drag; FIRE reads WALK |
 | Pause | `Esc` | pause pill, top right |
 
 HUD shows current player and colour, health, angle, power, weapon and ammo,

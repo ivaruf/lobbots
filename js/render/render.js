@@ -32,13 +32,35 @@
  *   correcting, and a player who cannot see where the last one went is being
  *   asked to correct from memory alone. The bookkeeping is in onEvent: the
  *   `fire` event names the owner, the next `projectileSpawn` is that shot's
- *   root projectile, and when that one is gone we keep its trail.
+ *   root projectile, and when that one is gone we keep its trail. It is not
+ *   drawn while the player has Move selected: they are not aiming a shot.
+ *
+ * THE MOVE PLAN
+ *   With Move selected (player.weaponId === 'move') the aiming player is
+ *   choosing where to walk, not where to shoot, so the field shows that
+ *   instead: a faint band along the ground covering how far a walk can go
+ *   either way, a dashed footpath to the dialled-in spot, and a ghost of
+ *   their own walker standing where the walk will really end. The sim's
+ *   world.walkPreview() is the authority on "really": a walk stops at a
+ *   cliff it cannot climb, and when it will, the marker turns red and a
+ *   striped stop post stands at the wall. Promising a spot the walk cannot
+ *   reach would be the same lie as a barrel the shell does not leave.
+ *
+ * WRECKS ARE NOT QUITE DEAD
+ *   A wreck smokes and, now and then, arcs. While its cook-off timer runs
+ *   (mech.cookOff, the death blast) it spits sparks from the hole faster and
+ *   faster; mech-draw.js paints the light, effects.js the sparks.
  */
 
-import { WIDTH, HEIGHT, BODY_LIFT } from '../config.js';
+import { WIDTH, HEIGHT, BODY_LIFT, FOOT_W } from '../config.js';
+// Namespace import for anything that may not exist yet in config.js: a
+// missing named import is a module-graph failure and a blank screen (hub
+// §2), a missing property on a namespace is just undefined.
+import * as CONFIG from '../config.js';
 import { createSky } from './sky.js';
 import { createTerrainLayer } from './terrain-draw.js';
-import { createMechLayer } from './mech-draw.js';
+import { createMechLayer, STRIDE } from './mech-draw.js';
+import { createProjectilePainter } from './projectile-draw.js';
 import { createEffects } from './effects.js';
 
 const TAU = Math.PI * 2;
@@ -46,9 +68,13 @@ const TAU = Math.PI * 2;
 /** How long the barrel takes to come back from a shot, seconds. */
 const RECOIL_TIME = 0.2;
 
-const PROJ_DARK = '#10131a';
-const PROJ_CORE = '#fff3d0';
 const MARK_OUTLINE = '#0b0d12';
+const HAZARD = '#ffd23f';
+const DANGER = '#ff4b3e';
+const MOVE_RANGE_FALLBACK = 220;
+/** Dash patterns, allocated once; setLineDash copies them. */
+const DASH = [6, 5];
+const NO_DASH = [];
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d', { alpha: false });
@@ -57,6 +83,12 @@ export function createRenderer(canvas) {
   const terrain = createTerrainLayer();
   const mechs = createMechLayer();
   const effects = createEffects();
+  const shells = createProjectilePainter();
+
+  /** Scratch mech for the Move plan's ghost walker; never allocated per frame. */
+  const ghost = { x: 0, y: 0, angle: 60, tilt: 0, recoil: 0, walking: false };
+  /** mech id -> last half-stride index seen, so each footfall kicks dust once. */
+  const strideSeen = new Map();
 
   /** The canvas rectangle expressed in field coordinates, margins included. */
   const view = { x0: 0, y0: 0, x1: WIDTH, y1: HEIGHT };
@@ -72,6 +104,7 @@ export function createRenderer(canvas) {
   let rectY = 0;
   let time = 0;
 
+  const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const options = { shake: true, trails: true };
 
   // --- shot memory ---------------------------------------------------------
@@ -160,6 +193,7 @@ export function createRenderer(canvas) {
         lastTrail.clear();
         rootOwner.clear();
         rootProj.clear();
+        strideSeen.clear();
         pendingOwner = null;
         break;
 
@@ -207,7 +241,11 @@ export function createRenderer(canvas) {
       }
 
       case 'explosion':
-        effects.explosion(e.x, e.y, e.radius, e.strength, !!e.mound);
+        effects.explosion(e.x, e.y, e.radius, e.strength, !!e.mound, e.weaponId);
+        break;
+
+      case 'deathBlast':
+        effects.deathBlast(e.x, e.y, mechs.skin(e.id).hex);
         break;
 
       case 'bounce':
@@ -281,6 +319,7 @@ export function createRenderer(canvas) {
     const world = match ? match.world : null;
     const wind = world ? world.wind : 0;
 
+    effects.setCalm(motionPreference.matches);
     effects.update(dt, wind);
 
     // --- background, never shaken (see sky.js) -----------------------------
@@ -318,8 +357,24 @@ export function createRenderer(canvas) {
       const m = list[i];
       if (m.alive) continue;
       const skin = mechs.skin(m.playerId);
-      mechs.drawWreck(ctx, m, skin);
+      mechs.drawWreck(ctx, m, skin, world.terrain, motionPreference.matches ? 0 : time);
       effects.wreckSmoke(m.x, m.y, dt);
+      if (m.cookOff > 0) {
+        // Same 1.2 s ramp mech-draw uses for its light, so they climb together.
+        const k = m.cookOff > 1.2 ? 0 : 1 - m.cookOff / 1.2;
+        effects.cookOff(m.x, m.y - BODY_LIFT * 0.6, k, dt);
+      } else if (Math.random() < dt * 0.35) {
+        effects.wreckSpark(m.x + (Math.random() - 0.5) * 16, m.y - BODY_LIFT * 0.5);
+      }
+    }
+
+    // The Move plan sits under the living walkers: the ghost is a promise,
+    // the real machine stands in front of it.
+    const planner = match.state === 'aim' && match.currentId ? match.player(match.currentId) : null;
+    const planning = !!(planner && planner.weaponId === 'move' && Number.isFinite(planner.moveX));
+    if (planning) {
+      const pm = mechById(match.currentId);
+      if (pm && pm.alive) drawMovePlan(ctx, world, pm, planner.moveX, mechs.skin(pm.playerId));
     }
 
     for (let i = 0; i < list.length; i++) {
@@ -330,7 +385,9 @@ export function createRenderer(canvas) {
         m.recoil -= dt / RECOIL_TIME;
         if (m.recoil < 0) m.recoil = 0;
       }
-      mechs.drawLive(ctx, m, mechs.skin(m.playerId), world.terrain);
+      mechs.drawLive(ctx, m, mechs.skin(m.playerId), world.terrain, motionPreference.matches ? 0 : time);
+      if (m.walking) footfalls(m);
+      else if (strideSeen.size) strideSeen.delete(m.id);
     }
 
     // --- trails -------------------------------------------------------------
@@ -345,7 +402,7 @@ export function createRenderer(canvas) {
     if (options.trails) {
       // Shot memory: the ghost of the aiming player's own last shot. Drawn
       // under the live ones, and faint enough to never be mistaken for one.
-      if (match.state === 'aim' && match.currentId) {
+      if (match.state === 'aim' && match.currentId && !planning) {
         const ghost = lastTrail.get(match.currentId);
         if (ghost) drawTrail(ctx, ghost, mechs.skin(match.currentId).hex, 0.14, 0.26, 3);
       }
@@ -356,7 +413,7 @@ export function createRenderer(canvas) {
 
     // --- projectiles --------------------------------------------------------
     for (let i = 0; i < projs.length; i++) {
-      drawProjectile(ctx, projs[i], mechs.skin(projs[i].ownerId).hex);
+      drawProjectile(ctx, projs[i], mechs.skin(projs[i].ownerId).hex, time);
     }
 
     effects.draw(ctx);
@@ -424,55 +481,141 @@ export function createRenderer(canvas) {
   }
 
   /**
-   * A shell: dark halo, a ring in the owner's colour, a hot core. Three discs
-   * because it has to read against a pale sky AND against dark strata, and
-   * one colour cannot do both. A burrower is inside the hill, so it is drawn
+   * A projectile, via projectile-draw.js: each weapon has its own sprite,
+   * pointed along its flight. A burrower is inside the hill, so it is drawn
    * faint with a marker ring — the player follows the dig rather than losing
    * the shot the moment it goes under.
    */
-  function drawProjectile(ctx2, p, hex) {
-    const r = p.radius || 3;
+  function drawProjectile(ctx2, p, hex, t) {
     const st = p.state;
-    const under = st && st.burrowing;
-
-    if (under) {
+    if (st && st.burrowing) {
       ctx2.globalAlpha = 0.85;
       ctx2.strokeStyle = hex;
       ctx2.lineWidth = 1.4;
       ctx2.beginPath();
-      ctx2.arc(p.x, p.y, r + 6, 0, TAU);
+      ctx2.arc(p.x, p.y, (p.radius || 3) + 7, 0, TAU);
       ctx2.stroke();
       ctx2.globalAlpha = 0.6;
     }
+    shells.draw(ctx2, p, hex, t);
+    ctx2.globalAlpha = 1;
+  }
 
-    ctx2.fillStyle = PROJ_DARK;
+  /**
+   * Dust at each footfall of a walking mech. A foot lands once per half
+   * stride; the index of the half-stride is remembered per mech so each one
+   * kicks exactly one puff, whatever the frame rate.
+   */
+  function footfalls(m) {
+    const half = Math.floor((m.walkDist || 0) / (STRIDE / 2));
+    const seen = strideSeen.get(m.id);
+    if (seen === half) return;
+    strideSeen.set(m.id, half);
+    if (seen === undefined) return; // first frame of a walk: nothing landed yet
+    const dir = m.walkDir < 0 ? -1 : 1;
+    const side = half % 2 ? 1 : -1;
+    effects.footDust(m.x + side * FOOT_W / 2, m.y, dir);
+  }
+
+  /** See THE MOVE PLAN in the header. */
+  function drawMovePlan(ctx2, world, m, targetX, skin) {
+    const terrain = world.terrain;
+    const range = Number.isFinite(CONFIG.MOVE_RANGE) ? CONFIG.MOVE_RANGE : MOVE_RANGE_FALLBACK;
+    const x0 = Math.max(2, m.x - range);
+    const x1 = Math.min(WIDTH - 2, m.x + range);
+    const hex = skin.hex;
+
+    // Reach band along the surface, with end brackets.
+    ctx2.lineCap = 'round';
+    ctx2.lineJoin = 'round';
+    ctx2.globalAlpha = 0.2;
+    ctx2.strokeStyle = hex;
+    ctx2.lineWidth = 6;
     ctx2.beginPath();
-    ctx2.arc(p.x, p.y, r + 2.2, 0, TAU);
-    ctx2.fill();
-
-    ctx2.fillStyle = hex;
-    ctx2.beginPath();
-    ctx2.arc(p.x, p.y, r + 1, 0, TAU);
-    ctx2.fill();
-
-    ctx2.fillStyle = PROJ_CORE;
-    ctx2.beginPath();
-    ctx2.arc(p.x, p.y, r * 0.8, 0, TAU);
-    ctx2.fill();
-
-    // A roller gets a spoke keyed to its own x, so it visibly rolls rather
-    // than sliding. Free: the phase is a position we already have.
-    if (st && st.rolling) {
-      const a = p.x * 0.11;
-      ctx2.globalAlpha = 0.9;
-      ctx2.strokeStyle = PROJ_DARK;
-      ctx2.lineWidth = 1.4;
+    for (let x = x0; x <= x1; x += 6) {
+      const y = terrain.surfaceAt(x) - 2;
+      if (x === x0) ctx2.moveTo(x, y); else ctx2.lineTo(x, y);
+    }
+    ctx2.stroke();
+    ctx2.globalAlpha = 0.6;
+    ctx2.lineWidth = 2;
+    for (let i = 0; i < 2; i++) {
+      const bx = i ? x1 : x0;
+      const by = terrain.surfaceAt(bx);
+      const inward = i ? -1 : 1;
       ctx2.beginPath();
-      ctx2.moveTo(p.x - Math.cos(a) * r, p.y - Math.sin(a) * r);
-      ctx2.lineTo(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
+      ctx2.moveTo(bx + inward * 5, by - 14);
+      ctx2.lineTo(bx, by - 14);
+      ctx2.lineTo(bx, by);
       ctx2.stroke();
     }
 
+    let pv = null;
+    if (typeof world.walkPreview === 'function') pv = world.walkPreview(m.playerId, targetX);
+    const px = pv && Number.isFinite(pv.x) ? pv.x : targetX;
+    const py = pv && Number.isFinite(pv.y) ? pv.y : terrain.surfaceAt(px);
+    const blocked = !!(pv && pv.blocked);
+    const dir = targetX >= m.x ? 1 : -1;
+
+    // Footpath: dashes along the ground from the mech to where it stops.
+    if (Math.abs(px - m.x) > 2) {
+      ctx2.globalAlpha = 0.85;
+      ctx2.strokeStyle = blocked ? DANGER : HAZARD;
+      ctx2.lineWidth = 2;
+      ctx2.setLineDash(DASH);
+      ctx2.beginPath();
+      const step = dir * 5;
+      let x = m.x;
+      ctx2.moveTo(x, m.y - 3);
+      for (;;) {
+        x += step;
+        if ((dir > 0 && x >= px) || (dir < 0 && x <= px)) break;
+        ctx2.lineTo(x, terrain.surfaceAt(x) - 3);
+      }
+      ctx2.lineTo(px, py - 3);
+      ctx2.stroke();
+      ctx2.setLineDash(NO_DASH);
+    }
+
+    // The ghost walker where the walk will end, leaning with the ground.
+    ghost.x = px;
+    ghost.y = py;
+    ghost.angle = m.angle;
+    const l = terrain.surfaceAt(px - FOOT_W / 2);
+    const r = terrain.surfaceAt(px + FOOT_W / 2);
+    let tilt = Math.atan2(r - l, FOOT_W);
+    if (tilt > 0.35) tilt = 0.35;
+    if (tilt < -0.35) tilt = -0.35;
+    ghost.tilt = tilt;
+    ctx2.globalAlpha = 0.32;
+    mechs.drawLive(ctx2, ghost, skin, terrain, 0);
+
+    // A down-pointing marker over it; red if the walk is cut short.
+    const my = py - BODY_LIFT - 46 + Math.sin(time * 4.2) * 2;
+    ctx2.globalAlpha = 1;
+    ctx2.beginPath();
+    ctx2.moveTo(px - 8, my);
+    ctx2.lineTo(px + 8, my);
+    ctx2.lineTo(px, my + 10);
+    ctx2.closePath();
+    ctx2.fillStyle = blocked ? DANGER : HAZARD;
+    ctx2.fill();
+    ctx2.lineWidth = 2;
+    ctx2.strokeStyle = MARK_OUTLINE;
+    ctx2.stroke();
+
+    if (blocked) {
+      // A striped stop post just past the stop point, against the wall.
+      const sx = px + dir * (FOOT_W / 2 + 6);
+      const sy = terrain.surfaceAt(px + dir * FOOT_W / 2);
+      const top = Math.min(sy, py) - 22;
+      ctx2.fillStyle = MARK_OUTLINE;
+      ctx2.fillRect(sx - 3.5, top - 1, 7, py - top + 1);
+      for (let yy = top; yy < py; yy += 5) {
+        ctx2.fillStyle = ((yy - top) / 5) % 2 < 1 ? DANGER : '#f3f5f8';
+        ctx2.fillRect(sx - 2.5, yy, 5, Math.min(5, py - yy));
+      }
+    }
     ctx2.globalAlpha = 1;
   }
 

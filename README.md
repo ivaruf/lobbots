@@ -40,7 +40,10 @@ simply does not appear; serve `~/projects/games` instead to see it.
    next one. Your angle and power are remembered between turns. A direct hit
    is devastating, a near miss hurts, terrain in the way halves the damage,
    and a walker whose ground disappears falls, taking damage if it was a long
-   way down.
+   way down. A wreck does not stay quiet: half a second after a walker dies
+   it cooks off as a random weapon from the arsenal, and once in a while that
+   is the nuke. Stand well back from anyone you are about to finish. Whatever
+   a wreck does is credited to whoever killed it.
 3. **The shop.** After every round each player, alive or wrecked, spends
    their bolts. Damage, kills, surviving and winning pay; everyone draws a
    salary; anyone far behind the richest player is topped up so they stay
@@ -57,6 +60,7 @@ simply does not appear; serve `~/projects/games` instead to see it.
 | Fine steps    | hold `Shift`                   | tap the pills                          |
 | Weapon        | `Q` `E` or `Tab`               | tap it in the strip                    |
 | Fire          | `Space` or `Enter`             | FIRE                                   |
+| Walk (Move)   | `←` `→` place the marker, `Space` walks | ◂ ▸ pills or drag, then WALK  |
 | Pause         | `Esc`                          | the pause pill, top right              |
 
 ## The arsenal
@@ -67,6 +71,24 @@ Bouncer, Dirt Bomb, Earth Mover, Burrower, Napalm, Volcano, Funky Bomb, Nuke.
 Laser, Heavy Laser, Homing Missile, Air Strike and the Gopher Bomb, plus the
 two guidance systems and three defences, are the next milestone; each is one
 object in the catalog and at most one small behaviour function.
+
+## Turbo
+
+Once every human walker is wrecked for the round, the bots finish it at
+triple speed: thinking, aiming, shells and cook-offs all at once, so being
+knocked out early does not mean a long wait. A TURBO ×3 button appears in the
+top bar while it runs; tap it to watch at normal speed instead
+(that choice lasts the match). An all-bot match always plays at normal speed.
+
+## Move
+
+Not in the original: a Move, bought in the shop like ammunition, spends your
+turn walking instead of shooting. Select it in the strip and the angle dial
+becomes a walk dial: ◂ ▸ slide a marker along the ground, up to 220 px either
+side, and FIRE reads WALK. The walker will not climb a cliff, step off a drop
+that would hurt, or walk into another walker; the marker shows exactly where it
+will stop before you commit. Bots buy them too, and use them to get away from
+a rival who is standing too close to shoot.
 
 ## Architecture
 
@@ -107,7 +129,10 @@ playing it.
 Sound is composed in Sonic Pi (`tools/audio/*.rb`) and rendered to
 `audio/*.m4a` with the hub's recorder; `tools/audio/encode.sh` is the recipe.
 Icons come from `tools/make-icons.py`. The walkers are drawn procedurally on
-the canvas; if the loop earns it, modelled sprite frames are a later job.
+the canvas, with faceted ceramic armor, cooling vents, machined gun assemblies,
+live hydraulic legs, suspension idle, visor
+blinks and recoil. The hangar and crew portraits share the same painter.
+Menu transitions and idle animation respect reduced-motion preferences.
 
 ## Intentionally simplified
 
@@ -119,6 +144,7 @@ the canvas; if the loop earns it, modelled sprite frames are a later job.
   one routine.
 - **No camera.** The whole field is always visible. Off-screen shells get an
   edge marker.
-- **Mechs do not walk, slide or tip over.** They stand, fall when the ground
-  goes, and lean with the slope. That is deliberate; this is artillery.
+- **Mechs walk only when you pay for it.** They stand, fall when the ground
+  goes, and lean with the slope; a bought Move is the one way to change
+  ground. They never slide or tip over. This is still artillery.
 - **No multiplayer yet.** The sim is shaped for it; nothing is wired.

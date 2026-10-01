@@ -18,7 +18,7 @@
  * Run: node tools/sim-smoke.mjs
  */
 
-import { SIM_DT, resolveSettings, TERRAIN_PROFILE_IDS } from '../js/config.js';
+import { SIM_DT, resolveSettings, TERRAIN_PROFILE_IDS, DEATH_BLASTS, MOVE_RANGE } from '../js/config.js';
 import { Match } from '../js/sim/match.js';
 import { World } from '../js/sim/world.js';
 import { Terrain } from '../js/sim/terrain.js';
@@ -45,7 +45,8 @@ console.log(`terrain: ${TERRAIN_PROFILE_IDS.length} profiles generate and seat t
 // ---------------------------------------------------------------------------
 // 2. Every shop weapon fires and the world goes quiet again.
 // ---------------------------------------------------------------------------
-for (const w of SHOP_ITEMS.concat([weaponById('shell')])) {
+const GUNS = SHOP_ITEMS.filter((w) => w.category !== 'utility');
+for (const w of GUNS.concat([weaponById('shell')])) {
   for (const mode of ['static', 'crumble', 'collapse']) {
     const settings = resolveSettings('default', { terrainMode: mode, terrainProfile: 'rolling', windMax: 40, seed: 5 });
     const world = new World(settings, mulberry32(11));
@@ -65,7 +66,77 @@ for (const w of SHOP_ITEMS.concat([weaponById('shell')])) {
     world.terrain.validate();
   }
 }
-console.log(`weapons: ${SHOP_ITEMS.length + 1} fire and settle in all three terrain modes`);
+console.log(`weapons: ${GUNS.length + 1} fire and settle in all three terrain modes`);
+
+/** Step a world until quiet, or fail after `limit` seconds. */
+function settle(world, label, limit = 40) {
+  const events = [];
+  const seen = [];
+  let t = 0;
+  while (!world.isQuiet() && t < limit) {
+    events.length = 0;
+    world.step(SIM_DT, events);
+    seen.push(...events);
+    t += SIM_DT;
+  }
+  assert(world.isQuiet(), `${label} never came to rest`);
+  world.terrain.validate();
+  return seen;
+}
+
+// ---------------------------------------------------------------------------
+// 2b. Every death blast in the table goes off and the world goes quiet; the
+//     wreck's damage is paid to the killer, not to the dead.
+// ---------------------------------------------------------------------------
+for (const [id] of DEATH_BLASTS) {
+  const settings = resolveSettings('default', { terrainProfile: 'flat', windMax: 0, seed: 3 });
+  const world = new World(settings, mulberry32(21));
+  world.setup([
+    { id: 'a', team: 'A', angle: 60, power: 60, weaponId: 'shell' },
+    { id: 'b', team: 'B', angle: 120, power: 60, weaponId: 'shell' },
+    { id: 'c', team: 'C', angle: 120, power: 60, weaponId: 'shell' },
+  ]);
+  const [a, b, c] = world.mechs;
+  // Stand c right beside b, so the wreck has someone to hurt.
+  c.x = b.x + 50; c.y = world.terrain.surfaceAt(c.x);
+  world.cookoffs.length = 0;
+  world.damage(b, 999, 'a', 'blast');
+  assert(world.cookoffs.length === 1, `${id}: a death queued no cook-off`);
+  world.cookoffs[0].weaponId = id;
+  const seen = settle(world, `death blast ${id}`);
+  assert(seen.some((e) => e.type === 'deathBlast' && e.weaponId === id), `${id}: no deathBlast event`);
+  for (const r of world.drainLedger()) {
+    if (r.to !== 'b') assert(r.by === 'a' || r.by === null, `${id}: wreck damage credited to ${r.by}`);
+  }
+  void a;
+}
+console.log(`death blasts: all ${DEATH_BLASTS.length} cook off, settle, and pay the killer`);
+
+// ---------------------------------------------------------------------------
+// 2c. A walk ends where its preview said it would, and never past range.
+// ---------------------------------------------------------------------------
+for (const id of TERRAIN_PROFILE_IDS) {
+  for (const dir of [-1, 1]) {
+    const settings = resolveSettings('default', { terrainProfile: id, seed: 8 });
+    const world = new World(settings, mulberry32(31));
+    world.setup([
+      { id: 'a', team: 'A', angle: 60, power: 60, weaponId: 'shell' },
+      { id: 'b', team: 'B', angle: 120, power: 60, weaponId: 'shell' },
+    ]);
+    const m = world.mechs[0];
+    const from = m.x;
+    const target = from + dir * MOVE_RANGE * 2; // past range on purpose
+    const preview = world.walkPreview('a', target);
+    if (!world.walk('a', target)) {
+      assert(preview.x === Math.round(from), `${id}: walk refused but preview moved to ${preview.x}`);
+      continue;
+    }
+    settle(world, `walk on ${id}`);
+    assert(Math.abs(m.x - from) <= MOVE_RANGE + 1, `${id}: walked ${Math.abs(m.x - from)} px`);
+    assert(m.x === preview.x, `${id}: walk stopped at ${m.x}, preview said ${preview.x}`);
+  }
+}
+console.log(`walking: previews agree with walks on all ${TERRAIN_PROFILE_IDS.length} profiles`);
 
 // ---------------------------------------------------------------------------
 // 3. A whole match of bots.
@@ -77,7 +148,7 @@ function playMatch(label, settings, specs) {
 
   const stats = {
     label, seed: match.seed, ticks: 0, turns: 0, shots: 0, hits: 0, deaths: 0,
-    rounds: 0, purchases: 0, explosions: 0, falls: 0, weaponsFired: new Set(), profiles: [],
+    rounds: 0, purchases: 0, explosions: 0, falls: 0, walks: 0, cookoffs: 0, weaponsFired: new Set(), profiles: [],
     longestTurn: 0, turnTicks: 0,
   };
   const MAX_TICKS = 120 * 60 * 60; // an hour of game time: a hung match trips this
@@ -92,6 +163,8 @@ function playMatch(label, settings, specs) {
           stats.turnTicks = 0;
           break;
         case 'fire': stats.shots++; stats.weaponsFired.add(e.weaponId); break;
+        case 'walkStart': stats.walks++; break;
+        case 'deathBlast': stats.cookoffs++; break;
         case 'mechHit': stats.hits++; break;
         case 'mechDied': stats.deaths++; break;
         case 'explosion': stats.explosions++; break;
@@ -141,6 +214,7 @@ function report(s) {
   console.log([
     `${s.label} (seed ${s.seed})`,
     `  rounds ${s.rounds}  turns ${s.turns}  shots ${s.shots}  hits ${s.hits}  deaths ${s.deaths}  explosions ${s.explosions}  falls ${s.falls}`,
+    `  walks ${s.walks}  death blasts ${s.cookoffs}`,
     `  purchases ${s.purchases}  weapons fired: ${[...s.weaponsFired].join(', ')}`,
     `  hills: ${s.profiles.join(', ')}`,
     `  game time ${(s.ticks / 120).toFixed(0)}s  longest turn ${(s.longestTurn / 120).toFixed(1)}s`,

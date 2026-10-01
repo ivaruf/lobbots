@@ -4,7 +4,7 @@
  *
  * A Match is a state machine driven by two things and nothing else:
  *
- *   apply(action)   a decision by a player (fire, buy, ready, aim)
+ *   apply(action)   a decision by a player (fire, move, buy, ready, aim)
  *   step(dt, events) fixed time passing
  *
  * That is deliberately the entire input surface (ARCHITECTURE.md §3). The
@@ -20,11 +20,11 @@
 
 import {
   PALETTE, ECONOMY, SCORE, TURN_GAP, AI_THINK_MIN, AI_THINK_MAX,
-  AI_ANGLE_RATE, AI_POWER_RATE, AI_SHOP_DWELL, AUTO_ADVANCE, WIDTH, resolveSettings,
+  AI_ANGLE_RATE, AI_POWER_RATE, AI_SHOP_DWELL, AUTO_ADVANCE, WIDTH, MOVE_RANGE, resolveSettings,
 } from '../config.js';
 import { mulberry32, hash, randomSeed, range } from './rng.js';
 import { World } from './world.js';
-import { weaponById, SHOP_ITEMS } from './weapons.js';
+import { weaponById, isUtility, SHOP_ITEMS } from './weapons.js';
 import * as AI from './ai.js';
 
 export class Match {
@@ -51,6 +51,9 @@ export class Match {
     this.thinkTimer = 0;
     this.aiPlan = null;
     this.timeLeft = 0;         // shot timer for humans, seconds
+    /** The round is decided but a wreck is still cooking off: hold the
+     *  table until the world is quiet, and let nobody fire meanwhile. */
+    this.roundEnding = false;
 
     // Between rounds.
     this.lastAwards = [];
@@ -86,6 +89,10 @@ export class Match {
       angle: null,
       power: 60,
       weaponId: 'shell',
+      // Move: where the walk would go (field x, null until Move is picked)
+      // and the weapon to hand back once the walk is done.
+      moveX: null,
+      prevWeaponId: 'shell',
       alive: true,
       aiMemory: null,
       ready: false,
@@ -126,7 +133,9 @@ export class Match {
   /** Weapons this player can fire right now, catalog order, shell first. */
   arsenal(player) {
     const ids = Object.keys(player.inventory).filter((id) => player.inventory[id] > 0);
-    return ids.map(weaponById).filter((w) => !w.hidden).sort((a, b) => (a.id === 'shell' ? -1 : b.id === 'shell' ? 1 : a.price - b.price));
+    // Shell first, utilities (Move) last, the guns by price between.
+    const rank = (w) => (w.id === 'shell' ? 0 : w.category === 'utility' ? 2 : 1);
+    return ids.map(weaponById).filter((w) => !w.hidden).sort((a, b) => rank(a) - rank(b) || a.price - b.price);
   }
 
   // -------------------------------------------------------------------------
@@ -147,6 +156,7 @@ export class Match {
     switch (action.type) {
       case 'aim': return this.applyAim(action);
       case 'fire': return this.applyFire(action);
+      case 'move': return this.applyMove(action);
       case 'buy': return this.applyBuy(action);
       case 'ready': return this.applyReady(action);
       default: return false;
@@ -158,9 +168,38 @@ export class Match {
     if (!p || this.state !== 'aim' || p.id !== this.currentId || p.isAI) return false;
     if (Number.isFinite(a.angle)) p.angle = clamp(Math.round(a.angle), 0, 180);
     if (Number.isFinite(a.power)) p.power = clamp(Math.round(a.power), 1, 100);
-    if (a.weaponId && this.ammo(p, a.weaponId) > 0) p.weaponId = a.weaponId;
+    if (a.weaponId && this.ammo(p, a.weaponId) > 0) this.selectWeapon(p, a.weaponId);
+    if (Number.isFinite(a.moveX) && p.weaponId === 'move') this.setMoveX(p, a.moveX);
     this.mirrorAim(p);
     return true;
+  }
+
+  /** Switch weapon, remembering the gun to go back to after a Move. */
+  selectWeapon(p, weaponId) {
+    if (weaponId === p.weaponId) return;
+    if (!isUtility(p.weaponId)) p.prevWeaponId = p.weaponId;
+    p.weaponId = weaponId;
+    if (weaponId === 'move' && p.moveX === null) {
+      // A first guess: half the range, the way the barrel faces.
+      const m = this.world && this.world.mechFor(p.id);
+      if (m) this.setMoveX(p, m.x + (p.angle <= 90 ? 1 : -1) * MOVE_RANGE * 0.5);
+    }
+  }
+
+  setMoveX(p, x) {
+    const m = this.world && this.world.mechFor(p.id);
+    if (!m) return;
+    const lo = Math.max(0, m.x - MOVE_RANGE), hi = Math.min(WIDTH, m.x + MOVE_RANGE);
+    p.moveX = clamp(Math.round(x), Math.round(lo), Math.round(hi));
+  }
+
+  applyMove(a) {
+    const p = this.player(a.playerId);
+    if (!p || this.state !== 'aim' || p.id !== this.currentId || this.roundEnding) return false;
+    if (this.ammo(p, 'move') <= 0) return false;
+    if (Number.isFinite(a.x)) this.setMoveX(p, a.x);
+    if (p.moveX === null) return false;
+    return this.walkNow(p, p.moveX);
   }
 
   applyFire(a) {
@@ -170,6 +209,8 @@ export class Match {
     const power = clamp(Math.round(Number.isFinite(a.power) ? a.power : p.power), 1, 100);
     let weaponId = a.weaponId || p.weaponId;
     if (this.ammo(p, weaponId) <= 0) weaponId = 'shell';
+    // FIRE with Move selected means "go": the one button commits the turn.
+    if (weaponId === 'move') return this.applyMove({ playerId: p.id });
     return this.fireNow(p, weaponId, angle, power);
   }
 
@@ -204,9 +245,11 @@ export class Match {
     this.round++;
     const roundRng = mulberry32(hash(this.seed, this.round));
     this.world = new World(this.settings, roundRng);
+    this.roundEnding = false;
     for (const p of this.players) {
       p.alive = true;
       p.ready = false;
+      p.moveX = null;
       p.round = { damage: 0, kills: 0, earned: 0 };
       // First round: face the middle. After that the aim is the player's own.
       if (p.angle === null) p.angle = 60;
@@ -249,6 +292,12 @@ export class Match {
     this.shot = null;
     this.gapTimer = 0;
     this.aiPlan = null;
+    // The walker may have moved (or been moved) since its last turn, so a
+    // remembered walk target is stale. And a turn that ended with Move in
+    // hand ended by walking: hand back the gun it held before, because the
+    // turn after a walk is almost always a shot.
+    p.moveX = null;
+    if (isUtility(p.weaponId)) p.weaponId = p.prevWeaponId;
     if (this.settings.windChanges === 'turn') {
       this.world.rollWind();
       this.events.push({ type: 'windChanged', wind: this.world.wind });
@@ -261,8 +310,8 @@ export class Match {
       // check at the end of the turn will catch it; fire a harmless shell up.
       this.aiPlan = plan || { weaponId: 'shell', angle: 90, power: 30, targetId: null };
       // Bots cannot fire what they do not own; the shop is the only source.
-      if (this.ammo(p, this.aiPlan.weaponId) <= 0) this.aiPlan.weaponId = 'shell';
-      p.weaponId = this.aiPlan.weaponId;
+      if (this.ammo(p, this.aiPlan.weaponId) <= 0) this.aiPlan = { ...this.aiPlan, weaponId: 'shell', moveX: undefined };
+      this.selectWeapon(p, this.aiPlan.weaponId);
       this.mirrorAim(p);
     }
     this.events.push({ type: 'turnStart', playerId: p.id, seat, isAI: p.isAI, timeLeft: this.timeLeft });
@@ -270,7 +319,7 @@ export class Match {
 
   fireNow(p, weaponId, angle, power) {
     const m = this.world.mechFor(p.id);
-    if (!m || !m.alive) return false;
+    if (!m || !m.alive || this.roundEnding) return false;
     p.angle = angle;
     p.power = power;
     p.weaponId = weaponId;
@@ -282,6 +331,24 @@ export class Match {
     this.shot = { playerId: p.id, weaponId, landing: null, lost: false };
     this.state = 'firing';
     this.gapTimer = 0;
+    return true;
+  }
+
+  /**
+   * Spend the turn walking. Refused (nothing spent) if the walker cannot
+   * take a single step that way, so a player pressing WALK into a wall gets
+   * a dud click instead of a lost turn and a lost Move.
+   */
+  walkNow(p, x) {
+    const m = this.world.mechFor(p.id);
+    if (!m || !m.alive) return false;
+    if (!this.world.walk(p.id, x)) return false;
+    p.inventory.move = Math.max(0, (p.inventory.move || 0) - 1);
+    this.shot = { playerId: p.id, weaponId: 'move', landing: null, lost: false, move: true };
+    this.state = 'firing';
+    this.gapTimer = 0;
+    // A bot's corrections were measured from where it stood. It has moved.
+    if (p.aiMemory) p.aiMemory.shots = {};
     return true;
   }
 
@@ -314,7 +381,8 @@ export class Match {
     const before = this.events.length;
     this.world.step(dt, this.events);
     this.absorbLedger();
-    if (this.events.length > before) this.checkDeathsMidAim();
+    if (this.events.length > before || this.roundEnding) this.checkDeathsMidAim();
+    if (this.state !== 'aim' || this.roundEnding) return;
 
     const p = this.current();
     if (!p) return;
@@ -324,6 +392,17 @@ export class Match {
       if (this.thinkTimer > 0) return;
       // Swing the barrel to the answer, visibly, then fire.
       const plan = this.aiPlan;
+      if (plan.weaponId === 'move') {
+        // Slide the walk marker out to the plan, visibly, then go.
+        if (p.moveX === null) this.setMoveX(p, this.world.mechFor(p.id).x);
+        this.setMoveX(p, approach(p.moveX, plan.moveX, AI_MOVE_RATE * dt));
+        if (Math.abs(p.moveX - plan.moveX) < 1 && !this.walkNow(p, p.moveX)) {
+          // The ground changed under the plan: fall back to a plain shot.
+          this.aiPlan = { ...plan, weaponId: 'shell' };
+          this.selectWeapon(p, 'shell');
+        }
+        return;
+      }
       p.angle = approach(p.angle, plan.angle, AI_ANGLE_RATE * dt);
       p.power = approach(p.power, plan.power, AI_POWER_RATE * dt);
       this.mirrorAim(p);
@@ -338,7 +417,10 @@ export class Match {
       if (this.timeLeft <= 0) {
         this.timeLeft = 0;
         this.events.push({ type: 'timerExpired', playerId: p.id });
-        this.fireNow(p, this.ammo(p, p.weaponId) > 0 ? p.weaponId : 'shell', p.angle, p.power);
+        // The turn goes as it stands: a dialled-in walk walks, if it can.
+        if (p.weaponId === 'move' && p.moveX !== null && this.walkNow(p, p.moveX)) return;
+        const w = this.ammo(p, p.weaponId) > 0 && !isUtility(p.weaponId) ? p.weaponId : 'shell';
+        this.fireNow(p, w, p.angle, p.power);
       }
     }
   }
@@ -388,13 +470,19 @@ export class Match {
   /** Someone died while nobody was firing (crumble under them). */
   checkDeathsMidAim() {
     const cur = this.world.mechFor(this.currentId);
-    if (this.world.aliveTeams().size <= 1) { this.endRound(); return; }
+    if (this.world.aliveTeams().size <= 1) {
+      // Decided — but a wreck still cooking off might yet take the last
+      // one standing with it, and either way it deserves to be seen.
+      if (this.world.isQuiet()) this.endRound();
+      else this.roundEnding = true;
+      return;
+    }
     if (cur && !cur.alive) this.beginTurn(this.nextAliveSeat());
   }
 
   endTurn() {
     const p = this.current();
-    if (p && p.isAI && this.shot) AI.observe(p, this.shot.landing, this.shot.lost);
+    if (p && p.isAI && this.shot && !this.shot.move) AI.observe(p, this.shot.landing, this.shot.lost);
     this.shot = null;
     if (this.world.aliveTeams().size <= 1) { this.endRound(); return; }
     this.beginTurn(this.nextAliveSeat());
@@ -447,6 +535,7 @@ export class Match {
     }
 
     this.lastAwards = awards;
+    this.roundEnding = false;
     this.currentId = null;
     this.state = 'scoreboard';
     this.autoTimer = 0;
@@ -534,6 +623,9 @@ export class Match {
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
+
+/** Bots slide their walk marker at this many px per second. */
+const AI_MOVE_RATE = 260;
 
 /** Move `v` toward `target` by at most `maxDelta`, landing exactly on it. */
 function approach(v, target, maxDelta) {

@@ -34,7 +34,7 @@ import { range, gauss } from './rng.js';
  * Fields:
  *   id, name, desc          what the shop shows
  *   price, pack             bolts per purchase and rounds it buys; pack Infinity = unlimited
- *   category                'shell' | 'special' | 'terrain' | 'heavy' | 'guidance' | 'defence'
+ *   category                'shell' | 'special' | 'terrain' | 'heavy' | 'utility' | 'guidance' | 'defence'
  *   flight, impact          registry names
  *   radius, damage          blast radius px and damage at the centre
  *   terrain                 'crater' | 'fill' | 'none' | 'scoop'
@@ -123,6 +123,17 @@ export const CATALOG = [
     radius: 150, damage: 200, terrain: 'crater', props: {}, icon: 'nuke', shake: 1,
   },
 
+
+  // ---- utilities: bought like a weapon, held in the same strip, never fired.
+  // The match intercepts them before anything is launched (match.js walkNow),
+  // which is why there is no flight to speak of. `category: 'utility'` is
+  // what keeps them out of the AI's weapon choice and the smoke test's guns.
+  {
+    id: 'move', name: 'Move', desc: 'Spend a turn walking instead of shooting. Up to a short way either side; will not climb a cliff or step off one.',
+    price: 350, pack: 2, category: 'utility', flight: 'ballistic', impact: 'explode',
+    radius: 0, damage: 0, terrain: 'none', props: {}, icon: 'move', shake: 0,
+  },
+
   // ---- child munitions: never in the shop -------------------------------
   {
     id: 'bomblet', name: 'Bomblet', desc: '', price: 0, pack: 0, category: 'child', hidden: true,
@@ -152,6 +163,12 @@ export const WEAPONS = Object.fromEntries(CATALOG.map((w) => [w.id, w]));
 
 /** What the shop lists, in catalog order. */
 export const SHOP_ITEMS = CATALOG.filter((w) => !w.hidden && w.price > 0);
+
+/** Bought and selected like a weapon, but never launched (Move). */
+export function isUtility(id) {
+  const w = WEAPONS[id];
+  return !!w && w.category === 'utility';
+}
 
 export function weaponById(id) {
   return WEAPONS[id] || WEAPONS.shell;

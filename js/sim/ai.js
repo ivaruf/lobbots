@@ -21,7 +21,7 @@
  * All randomness comes from the match's rng, so an AI match replays.
  */
 
-import { BODY_LIFT } from '../config.js';
+import { BODY_LIFT, MOVE_RANGE } from '../config.js';
 import { powerForElevation, hangTime } from './ballistics.js';
 import { SHOP_ITEMS, weaponById } from './weapons.js';
 import { range, gauss, pick, shuffle } from './rng.js';
@@ -46,13 +46,13 @@ export const PERSONALITIES = {
     id: 'calculator', name: 'Calculator', blurb: 'Dials in from the last miss. Give it two shots and worry.',
     aimNoise: 0.06, angleNoise: 1, learnRate: 0.9, forget: 0, windSkill: 0.7,
     arc: 'high', targeting: 'nearest', weaponStyle: 'dialed',
-    shopping: { reserve: 0.15, prefs: ['heavy', 'mega', 'mirv', 'burrower'] },
+    shopping: { reserve: 0.15, prefs: ['heavy', 'mega', 'mirv', 'move', 'burrower'] },
   },
   sniper: {
     id: 'sniper', name: 'Sniper', blurb: 'Flat, accurate, stingy. Spends the good ammo only when sure.',
     aimNoise: 0.04, angleNoise: 1, learnRate: 0.85, forget: 0, windSkill: 0.85,
     arc: 'low', targeting: 'weakest', weaponStyle: 'conserve',
-    shopping: { reserve: 0.4, prefs: ['mega', 'heavy', 'burrower'] },
+    shopping: { reserve: 0.4, prefs: ['mega', 'heavy', 'move', 'burrower'] },
   },
   maniac: {
     id: 'maniac', name: 'Maniac', blurb: 'Buys the biggest thing in the shop and fires it at whoever is closest.',
@@ -64,7 +64,7 @@ export const PERSONALITIES = {
     id: 'economist', name: 'Economist', blurb: 'Saves half of everything. Picks on the wounded.',
     aimNoise: 0.08, angleNoise: 2, learnRate: 0.75, forget: 0.05, windSkill: 0.6,
     arc: 'mixed', targeting: 'weakest', weaponStyle: 'conserve',
-    shopping: { reserve: 0.5, prefs: ['heavy', 'cluster', 'roller', 'dirt'] },
+    shopping: { reserve: 0.5, prefs: ['heavy', 'move', 'cluster', 'roller', 'dirt'] },
   },
   chaos: {
     id: 'chaos', name: 'Chaos Gopher', blurb: 'Plausible choices in an implausible order. Delightful to watch, from a distance.',
@@ -93,6 +93,12 @@ export function decide(world, player, rng) {
   if (!me || !me.alive) return null;
   const enemies = world.mechs.filter((m) => m.alive && m.playerId !== player.id && m.team !== me.team);
   if (!enemies.length) return null;
+
+  // A bot that owns a Move may spend the turn on it instead (see below).
+  if ((player.inventory.move || 0) > 0) {
+    const walk = considerMove(world, P, player, me, enemies, rng);
+    if (walk) return walk;
+  }
 
   const mem = (player.aiMemory ||= { targetId: null, shots: {} });
 
@@ -185,6 +191,35 @@ export function decide(world, player, rng) {
 }
 
 /**
+ * Should this turn be a walk? Bots walk for the reasons a person does: a
+ * rival is standing close enough that every shot at it hurts the shooter
+ * too, or the bot is nearly dead and would rather be somewhere else. Now
+ * and then, for no reason at all, if it is the Chaos Gopher. The walk goes
+ * away from the nearest rival, and the plan's target is the PREVIEWED stop,
+ * so the bot never plans a walk into a wall it could have seen.
+ */
+function considerMove(world, P, player, me, enemies, rng) {
+  const nearest = enemies.reduce((a, b) => (Math.abs(b.x - me.x) < Math.abs(a.x - me.x) ? b : a));
+  const gap = Math.abs(nearest.x - me.x);
+  const crowded = gap < 150;
+  const hurt = me.health < me.maxHealth * 0.35;
+  const urge = crowded ? 0.7 : hurt ? 0.25 : P.weaponStyle === 'chaos' ? 0.12 : 0.03;
+  if (rng() >= urge) return null;
+
+  let dir = nearest.x > me.x ? -1 : 1;
+  if (P.weaponStyle === 'chaos' && !crowded && rng() < 0.5) dir = -dir;
+  const want = MOVE_RANGE * range(rng, 0.6, 1);
+  let stop = world.walkPreview(player.id, me.x + dir * want);
+  // Hemmed in that way. Walking toward a rival who is already too close is
+  // no answer, so only an uncrowded bot tries the other side.
+  if ((!stop || Math.abs(stop.x - me.x) < 40) && !crowded) {
+    stop = world.walkPreview(player.id, me.x - dir * want);
+  }
+  if (!stop || Math.abs(stop.x - me.x) < 40) return null;
+  return { weaponId: 'move', moveX: stop.x, angle: player.angle, power: player.power, targetId: null };
+}
+
+/**
  * The match reports where the shot ended: the first explosion, or the point
  * it was lost. The next decide() corrects from it.
  */
@@ -239,7 +274,7 @@ function solveWithWind(dist, dyUp, elev, g, windAlong, windSkill) {
 /** Which of the player's weapons to use this turn. */
 function chooseWeapon(P, player, target, dist, confident, rng) {
   const owned = Object.entries(player.inventory)
-    .filter(([id, n]) => n > 0 && weaponById(id) && !weaponById(id).hidden)
+    .filter(([id, n]) => n > 0 && weaponById(id) && !weaponById(id).hidden && weaponById(id).category !== 'utility')
     .map(([id]) => weaponById(id));
   const specials = owned.filter((w) => w.id !== 'shell');
   if (!specials.length) return 'shell';

@@ -35,6 +35,7 @@ const WARM_RGB = '201, 138, 106'; // #c98a6a, kept as parts so the band can fade
 
 const RIDGE_FAR = '#3f4064';
 const RIDGE_NEAR = '#2c2e46';
+const MOON_CRATERS = [[1250, 145, 8], [1271, 164, 6], [1247, 167, 4]];
 
 /** Where the ground colour of the sky takes over. Field px, y down. */
 const HORIZON_Y = HEIGHT * 0.66;
@@ -163,6 +164,23 @@ export function createSky() {
       ctx.fillRect(view.x0, view.y0, vw, vh);
       ctx.fillStyle = warmGrad;
       ctx.fillRect(view.x0, view.y0, vw, vh);
+
+      // Fixed celestial details sit behind drifting clouds, away from the
+      // terrain silhouettes. A deterministic scatter never flickers on resize.
+      ctx.fillStyle = '#d5e8ff';
+      for (let i = 0; i < 65; i++) {
+        const x = ((i * 7919) % 1600);
+        const y = ((i * 3571) % 320) - 25;
+        ctx.globalAlpha = 0.15 + (i % 4) * 0.09;
+        ctx.fillRect(x, y, i % 7 === 0 ? 2 : 1, i % 7 === 0 ? 2 : 1);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#c9d7e4';
+      ctx.beginPath(); ctx.arc(1260, 155, 31, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#9bafc050';
+      for (const [x, y, r] of MOON_CRATERS) {
+        ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+      }
 
       // Clouds. The drift domain is the view plus a sprite's width either
       // side, so one never pops in at the edge.
