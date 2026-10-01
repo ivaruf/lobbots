@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.2.0'; // wrecks cook off, Move walks, every shell its own sprite
+const VERSION = 'v0.2.1'; // turbo on any bot turn, remembered
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is

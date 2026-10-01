@@ -74,11 +74,18 @@ object in the catalog and at most one small behaviour function.
 
 ## Turbo
 
-Once every human walker is wrecked for the round, the bots finish it at
-triple speed: thinking, aiming, shells and cook-offs all at once, so being
-knocked out early does not mean a long wait. A TURBO ×3 button appears in the
-top bar while it runs; tap it to watch at normal speed instead
-(that choice lasts the match). An all-bot match always plays at normal speed.
+The bots can play at triple speed: thinking, aiming, shells and cook-offs all
+at once. A TURBO ×3 pill (or `T`) appears in the top bar whenever a bot is
+playing, and it holds two separate choices:
+
+- **On a bot's turn while you are still in**, turbo is off until you turn it
+  on, and that choice is remembered next time you play. Your own shots always
+  fly at normal speed.
+- **Once every human is wrecked for the round**, turbo is on by default, so
+  being knocked out early does not mean a long wait. Tap it to watch at normal
+  speed; that lasts the match.
+
+An all-bot match always plays at normal speed.
 
 ## Move
 

@@ -57,9 +57,16 @@ const WALK_STEP = 2;
  * until the round is over. It is purely more SIM_DT steps per real second —
  * the sim never sees a different dt, so a turbo round is the same round, and
  * the bots' think pauses, barrel swings and shells all speed up together.
- * The player can tap it off; that choice lasts the match.
+ *
+ * It also runs on any bot's turn while humans are still in, but only if the
+ * player asks: watching a rival's shot land is information, so that one is
+ * off by default and the choice is remembered across visits. Two choices,
+ * one button: the pill shows whichever applies right now, so it never reads
+ * "on" while the game is running at normal speed. Never on a human's own
+ * turn — your shot flies at the speed you aimed it.
  */
 const TURBO_SPEED = 3;
+const TURBO_KEY = 'lobbots.turbo.v1';
 
 const canvas = document.getElementById('field');
 const renderer = createRenderer(canvas);
@@ -77,8 +84,10 @@ let crumbleTimer = 0;
 let lastSpecs = null;
 let lastPreset = 'default';
 let lastRounds = null;
-let turboWanted = true;   // the player's choice; turbo only runs when they are out
-let turboShown = false;   // the button is up (every human is out this round)
+let turboOut = true;      // turbo once every human is out; per match, default on
+let turboBots = loadTurboBots(); // turbo on bot turns while humans are in; remembered
+let turboShown = false;   // the button is up (a bot is playing, or everyone is out)
+let turboMode = null;     // 'out' | 'bots' | null: which choice the button is showing
 let turboRound = 0;       // the round the "you're out" banner was last shown in
 
 // ---------------------------------------------------------------------------
@@ -98,10 +107,7 @@ const ui = createUI({
   onResume: resume,
   onQuit: quitMatch,
   onVolume: (v) => audio.setVolume(v),
-  onTurbo: () => {
-    turboWanted = !turboWanted;
-    ui.setTurbo(turboShown, turboWanted);
-  },
+  onTurbo: () => toggleTurbo(),
 });
 
 const input = createInput(canvas, {
@@ -199,8 +205,9 @@ function startMatch(specs, settings) {
   accumulator = 0;
   resultsTimer = 0;
   paused = false;
-  turboWanted = true;
+  turboOut = true;
   turboShown = false;
+  turboMode = null;
   turboRound = 0;
   ui.setTurbo(false, true);
   mode = 'play';
@@ -397,12 +404,38 @@ function humansOut() {
   return true;
 }
 
-/** Show or hide the turbo button as the round goes; announce it once. */
+/** A bot is aiming or its shot is in the air, with humans still standing. */
+function botActing() {
+  if (!match || (match.state !== 'aim' && match.state !== 'firing')) return false;
+  const p = match.current();
+  return !!p && p.isAI && match.humans().length > 0;
+}
+
+function turboOn() {
+  return turboMode === 'out' ? turboOut : turboMode === 'bots' ? turboBots : false;
+}
+
+function toggleTurbo() {
+  if (turboMode === 'out') turboOut = !turboOut;
+  else if (turboMode === 'bots') {
+    turboBots = !turboBots;
+    try { localStorage.setItem(TURBO_KEY, turboBots ? '1' : '0'); } catch { /* private mode: lasts the visit */ }
+  } else return;
+  ui.setTurbo(true, turboOn());
+}
+
+function loadTurboBots() {
+  try { return localStorage.getItem(TURBO_KEY) === '1'; } catch { return false; }
+}
+
+/** Show or hide the turbo button as the round goes; announce "out" once. */
 function syncTurbo() {
   const out = humansOut();
-  if (out !== turboShown) {
-    turboShown = out;
-    ui.setTurbo(out, turboWanted);
+  const want = out ? 'out' : botActing() ? 'bots' : null;
+  if (want !== turboMode) {
+    turboMode = want;
+    turboShown = want !== null;
+    ui.setTurbo(turboShown, turboOn());
     if (out && turboRound !== match.round) {
       turboRound = match.round;
       ui.banner(match.humans().length > 1 ? 'Everyone is out' : 'You are out', `Turbo ×${TURBO_SPEED} — the bots settle it`, 1400);
@@ -423,7 +456,7 @@ function frame(now) {
 
   if (match && mode === 'play' && !paused) {
     syncTurbo();
-    const speed = turboShown && turboWanted ? TURBO_SPEED : 1;
+    const speed = turboOn() ? TURBO_SPEED : 1;
     const maxSteps = 12 * speed;
     accumulator += dt * speed;
     let steps = 0;
@@ -466,6 +499,16 @@ const unlock = () => {
 };
 window.addEventListener('pointerdown', unlock);
 window.addEventListener('keydown', unlock);
+
+// T toggles turbo whenever the pill is up. Not in input.js: that one is
+// switched off for exactly the turns turbo is for (a bot's).
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 't' && e.key !== 'T') return;
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || paused || !turboShown) return;
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  toggleTurbo();
+});
 ui.setVolume(audio.volume);
 
 // The way back to the arcade. exit.js is a deferred classic script from

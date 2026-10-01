@@ -204,15 +204,15 @@
 
           <div id="shot-timer" hidden>0</div>
 
-          <!-- Shown only once every human walker is wrecked for the round:
-               the bots finish it at triple speed. Pressed = on; a tap
-               slows it back down for anyone who wants to watch. -->
+          <!-- Shown while a bot is playing: on its turns, and for the rest of
+               the round once every human walker is wrecked. Pressed = the
+               bots run at triple speed. js/main.js keeps the two choices. -->
           <button
             type="button"
             id="turbo-btn"
             hidden
             aria-pressed="true"
-            title="You are out: the bots play on at triple speed. Tap for normal speed."
+            title="Bots at triple speed (T)"
           >
             Turbo ×3
           </button>
