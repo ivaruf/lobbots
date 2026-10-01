@@ -203,19 +203,6 @@
           </div>
 
           <div id="shot-timer" hidden>0</div>
-
-          <!-- Shown while a bot is playing: on its turns, and for the rest of
-               the round once every human walker is wrecked. Pressed = the
-               bots run at triple speed. js/main.js keeps the two choices. -->
-          <button
-            type="button"
-            id="turbo-btn"
-            hidden
-            aria-pressed="true"
-            title="Bots at triple speed (T)"
-          >
-            Turbo ×3
-          </button>
         </div>
 
         <div id="hud-bottom">
@@ -339,6 +326,23 @@
                 value="80"
               />
               <output id="volume-out" for="volume">80</output>
+            </div>
+          </div>
+          <!-- How fast the bots play: their thinking, aiming and shells, on
+               their turns and for the rest of a round you are out of. Your
+               own shot always flies at ×1. js/main.js keeps the number. -->
+          <div class="row">
+            <label class="label" for="bot-speed">Bot speed</label>
+            <div class="slider">
+              <input
+                type="range"
+                id="bot-speed"
+                min="1"
+                max="4"
+                step="0.5"
+                value="1"
+              />
+              <output id="bot-speed-out" for="bot-speed">×1</output>
             </div>
           </div>
         </div>

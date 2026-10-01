@@ -867,36 +867,6 @@ button:disabled {
   font-variant-numeric: tabular-nums;
   color: var(--accent);
 }
-/* The one tappable thing in the top strip, and only while you are out:
-   nothing to aim then, so the drag area it takes is not missed. */
-#turbo-btn {
-  margin-left: auto;
-  pointer-events: auto;
-  min-height: 36px;
-  padding: 6px 14px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: rgba(21, 24, 30, 0.8);
-  color: var(--muted);
-  font-family: var(--head);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-#turbo-btn[aria-pressed='true'] {
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 12px rgba(167, 217, 232, 0.25);
-}
-#turbo-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-#turbo-btn[hidden] {
-  display: none;
-}
 #shot-timer.urgent {
   color: var(--danger);
   animation: urgent 0.8s steps(2) infinite;

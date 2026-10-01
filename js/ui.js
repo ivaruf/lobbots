@@ -503,7 +503,7 @@ export function createUI(callbacks = {}) {
     onResume() {},
     onQuit() {},
     onVolume() {},
-    onTurbo() {},
+    onBotSpeed() {},
     ...callbacks,
   };
 
@@ -550,11 +550,7 @@ export function createUI(callbacks = {}) {
   const windBar = $('wind-bar');
   const windHead = $('wind-head');
   const shotTimer = $('shot-timer');
-  const turboBtn = $('turbo-btn');
-  turboBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    cb.onTurbo();
-  });
+
   const angleVal = $('angle-val');
   const angleUnit = $('angle-unit');
   const angleLabel = $('angle-label');
@@ -582,6 +578,8 @@ export function createUI(callbacks = {}) {
   const quitBtn = $('quit-btn');
   const volume = $('volume');
   const volumeOut = $('volume-out');
+  const botSpeed = $('bot-speed');
+  const botSpeedOut = $('bot-speed-out');
 
   // =========================================================================
   // Setup screen
@@ -1462,6 +1460,12 @@ export function createUI(callbacks = {}) {
     e.stopPropagation();
     cb.onQuit();
   });
+  botSpeed.addEventListener('input', () => {
+    const v = Math.max(1, Math.min(4, Number(botSpeed.value) || 1));
+    setText(botSpeedOut, `×${v}`);
+    cb.onBotSpeed(v);
+  });
+
   volume.addEventListener('input', () => {
     const v = Math.max(0, Math.min(100, Number(volume.value) || 0));
     setText(volumeOut, v);
@@ -1541,12 +1545,6 @@ export function createUI(callbacks = {}) {
     updateHud,
     lockControls,
 
-    /** Turbo: `available` once every human is out, `on` while it runs. */
-    setTurbo(available, on) {
-      turboBtn.hidden = !available;
-      turboBtn.setAttribute('aria-pressed', String(!!on));
-      turboBtn.setAttribute('aria-label', on ? 'Turbo on, triple speed' : 'Turbo off, normal speed');
-    },
 
     showScoreboard,
     showShop,
@@ -1572,6 +1570,12 @@ export function createUI(callbacks = {}) {
 
     banner,
     setExit,
+
+    /** Bot speed as a multiplier, 1..4. Sets the slider without calling back. */
+    setBotSpeed(v) {
+      botSpeed.value = String(v);
+      setText(botSpeedOut, `×${v}`);
+    },
 
     /** Volume as 0..1. Sets the slider without calling back. */
     setVolume(v) {

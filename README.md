@@ -72,20 +72,13 @@ Laser, Heavy Laser, Homing Missile, Air Strike and the Gopher Bomb, plus the
 two guidance systems and three defences, are the next milestone; each is one
 object in the catalog and at most one small behaviour function.
 
-## Turbo
+## Bot speed
 
-The bots can play at triple speed: thinking, aiming, shells and cook-offs all
-at once. A TURBO ×3 pill (or `T`) appears in the top bar whenever a bot is
-playing, and it holds two separate choices:
-
-- **On a bot's turn while you are still in**, turbo is off until you turn it
-  on, and that choice is remembered next time you play. Your own shots always
-  fly at normal speed.
-- **Once every human is wrecked for the round**, turbo is on by default, so
-  being knocked out early does not mean a long wait. Tap it to watch at normal
-  speed; that lasts the match.
-
-An all-bot match always plays at normal speed.
+The pause menu has a **Bot speed** slider, ×1 to ×4. While a bot is playing —
+on its turns, and for the rest of a round once every human is wrecked — the
+whole game runs that much faster: thinking, aiming, shells and cook-offs
+together. Your own shots always fly at ×1. It starts at ×1 and is remembered
+next time you play.
 
 ## Move
 
