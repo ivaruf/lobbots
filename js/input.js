@@ -20,8 +20,13 @@
  * way to lose a match by brushing the screen.
  *
  * THE DOM OWNS ITS OWN KEYS. A key event whose target is a text field is that
- * field's business and we never see it; a key event on a button is the
- * button's, so Enter and Space press it rather than firing a shell. Escape is
+ * field's business and we never see it. A button owns Enter, Space and Tab
+ * only when the player reached it WITH THE KEYBOARD, so
+ * tabbing to a weapon and pressing Space picks it. A button that merely kept
+ * focus after a mouse click owns nothing: clicking a weapon and then reaching
+ * for the arrows and Space must aim and fire, not press the weapon again, and
+ * until 2026-10-01 it silently did neither. Arrows, Q and E never belong to
+ * a button at all. Escape is
  * the single exception in both directions: it pauses from anywhere, and it
  * pauses even when the sim has taken the controls away, because "I cannot get
  * out of this" is the one failure a pause button exists to prevent.
@@ -149,9 +154,25 @@ export function createInput(canvas, handlers = {}) {
     );
   }
 
-  /** A button owns Enter and Space; it does not own Escape. */
-  function isButton(t) {
-    return !!t && (t.tagName === 'BUTTON' || t.getAttribute?.('role') === 'button');
+  /**
+   * The button a pointer last pressed, while it still holds the focus that
+   * press gave it. Tracked by hand rather than read off :focus-visible,
+   * because browsers promote a mouse-focused element to focus-visible on the
+   * very first key pressed over it — which is exactly the key in question.
+   * Any focus that arrives some other way (Tab, script) clears it.
+   */
+  let pointerFocus = null;
+  document.addEventListener('pointerdown', (e) => {
+    pointerFocus = e.target && e.target.closest ? e.target.closest('button, [role="button"]') : null;
+  }, true);
+  document.addEventListener('focusin', (e) => {
+    if (e.target !== pointerFocus) pointerFocus = null;
+  }, true);
+
+  /** A button the keyboard brought focus to: it owns Enter, Space and Tab. */
+  function isKeyboardButton(t) {
+    if (!t || !(t.tagName === 'BUTTON' || t.getAttribute?.('role') === 'button')) return false;
+    return t !== pointerFocus;
   }
 
   function onKeyDown(e) {
@@ -166,8 +187,12 @@ export function createInput(canvas, handlers = {}) {
       return;
     }
 
-    if (isButton(e.target)) return;
+    const owned = e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter' || e.key === 'Tab';
+    if (owned && isKeyboardButton(e.target)) return;
     if (!enabled) return;
+    // A mouse-clicked button still holding focus would otherwise answer the
+    // Space we are about to treat as FIRE with a click of its own on keyup.
+    if (owned && e.target && e.target.tagName === 'BUTTON') e.target.blur();
 
     switch (e.key) {
       case 'ArrowLeft':
