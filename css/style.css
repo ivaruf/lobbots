@@ -81,6 +81,31 @@ body {
   display: none !important;
 }
 
+/*
+ * This is a game, not a document. On a tablet a resting thumb is a long
+ * press and a drag across the HUD is a text selection, so iPad Safari keeps
+ * highlighting labels and offering Copy / Look Up mid-aim. Nothing selects
+ * and nothing opens a callout, except a real text field (the seat names).
+ * `manipulation` drops double-tap-to-zoom without taking pinch away.
+ * js/touch-guard.js is the second half: CSS alone is not honoured
+ * everywhere (hub CLAUDE.md §2, "a game is not a document").
+ */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 /* The battlefield. touch-action:none because js/input.js reads a drag here as
    angle and power, and a browser that decides the same gesture is a scroll
    takes the aim with it. */
