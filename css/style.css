@@ -1665,10 +1665,84 @@ button:disabled {
     grid-area: tools;
   }
 
-  /* ---- The HUD gives the field back as much height as it can ---- */
+  /* ---- The HUD gives the field back as much height as it can ----
+   * ONE row, always. Wrapping put FIRE on a second line and doubled the strip
+   * to 40% of a 375px screen, and the renderer now fits the battlefield ABOVE
+   * this strip (main.js syncInsets), so every pixel of strip height is a
+   * pixel of hill lost. The loadout lane shrinks and scrolls sideways inside
+   * itself instead; the dials and FIRE keep their size, because those are
+   * the controls a thumb is reaching for every turn. (2026-10-02, after the
+   * owner: "lobbots looks horrible on mobile landscape".) */
   #hud-bottom {
     padding: 6px 8px;
     gap: 6px;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .dials {
+    gap: 6px;
+  }
+  .dial {
+    padding: 3px;
+    gap: 3px;
+  }
+  .dial-read {
+    min-width: 44px;
+  }
+  #weapons {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* ---- The parts counter: two columns of compact rows ----
+   * Stacked, a row is price over pack over BUY and only two fit on screen.
+   * In a line, and two abreast, a whole shelf of the arsenal does. */
+  #shop-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .shop-row {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 5px 7px;
+  }
+  .shop-row .wicon {
+    width: 30px;
+    height: 30px;
+  }
+  .sr-desc {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sr-buy {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .buy {
+    margin-top: 0;
+    min-height: 38px;
+  }
+  .shop-head {
+    flex-direction: row;
+    justify-content: center;
+    gap: 16px;
+  }
+}
+/* Two abreast on the narrowest sideways phones leaves a description three
+ * letters and an ellipsis, which says nothing and looks broken. The name gets
+ * the room instead, and the pack size goes too (it is on the button's row
+ * once bought, as "owned"); both are still there upright. */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 760px) {
+  .sr-desc,
+  .sr-pack {
+    display: none;
+  }
+  .sr-name {
+    line-height: 1.15;
   }
   #fire-btn {
     min-height: 52px;

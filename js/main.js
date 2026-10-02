@@ -499,6 +499,39 @@ window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', resize);
 resize();
 
+/**
+ * Keep the battlefield out from under the HUD (render.js setInsets). The top
+ * inset is where the top strip's CONTENT ends, not its box, because the box
+ * carries a fade that is meant to sit over sky; the bottom strip is opaque, so
+ * its whole box counts. A ResizeObserver catches everything that changes
+ * them — the HUD appearing, a rotation, a weapon strip growing — and a hidden
+ * HUD (shop, scoreboard) measures as nothing, which is ignored so the field
+ * does not jump while it is off screen.
+ */
+function syncInsets() {
+  const top = document.getElementById('hud-top');
+  const bottom = document.getElementById('hud-bottom');
+  if (!top || !bottom) return;
+  const field = canvas.getBoundingClientRect();
+  const bRect = bottom.getBoundingClientRect();
+  if (!bRect.height) return;
+  let contentBottom = field.top;
+  for (const child of top.children) {
+    if (child.hidden) continue;
+    const r = child.getBoundingClientRect();
+    if (r.height) contentBottom = Math.max(contentBottom, r.bottom);
+  }
+  renderer.setInsets(contentBottom - field.top + 4, field.bottom - bRect.top);
+}
+if (typeof ResizeObserver === 'function') {
+  const watch = new ResizeObserver(syncInsets);
+  for (const id of ['hud-top', 'hud-bottom']) {
+    const node = document.getElementById(id);
+    if (node) watch.observe(node);
+  }
+}
+window.addEventListener('resize', syncInsets);
+
 // Sound may only start from a gesture. The first one anywhere unlocks it;
 // the volume the player last chose is already in the audio module.
 const unlock = () => {

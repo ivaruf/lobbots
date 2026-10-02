@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.2.5'; // a tablet no longer selects text or opens callouts
+const VERSION = 'v0.2.6'; // the whole hill above the controls on a sideways phone, and a shop you can see
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is

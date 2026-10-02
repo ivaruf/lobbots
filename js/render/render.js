@@ -76,6 +76,11 @@ const MOVE_RANGE_FALLBACK = 220;
 const DASH = [6, 5];
 const NO_DASH = [];
 
+/** terrain-draw.js's bedrock, for the strip under the field. */
+const BEDROCK_UNDER = '#191920';
+/** Laid over the ground beyond the field's edges, so the edge of play shows. */
+const BEYOND_DIM = 'rgba(10, 14, 26, 0.5)';
+
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d', { alpha: false });
 
@@ -141,6 +146,24 @@ export function createRenderer(canvas) {
   // The API
   // -------------------------------------------------------------------------
 
+  /**
+   * How much of the canvas the HUD covers, in CSS px. The field is fitted into
+   * what is left, so the whole hill is always visible above the controls —
+   * fitting it to the full canvas and laying the HUD over the top hid
+   * whatever stood low in a valley on a landscape phone, where the control
+   * strip is a quarter of the screen. main.js measures the strips and tells
+   * us; until it does, nothing is covered.
+   */
+  const insets = { top: 0, bottom: 0 };
+  function setInsets(top, bottom) {
+    const t = Math.max(0, Math.round(top || 0));
+    const b = Math.max(0, Math.round(bottom || 0));
+    if (t === insets.top && b === insets.bottom) return;
+    insets.top = t;
+    insets.bottom = b;
+    resize();
+  }
+
   function resize() {
     const cssW = canvas.clientWidth || canvas.width || WIDTH;
     const cssH = canvas.clientHeight || canvas.height || HEIGHT;
@@ -150,10 +173,14 @@ export function createRenderer(canvas) {
     if (canvas.width !== bw) canvas.width = bw;
     if (canvas.height !== bh) canvas.height = bh;
 
-    scale = Math.min(cssW / WIDTH, cssH / HEIGHT);
+    // Never let the insets squeeze the field below half the canvas: on a
+    // screen that short the HUD overlapping some hill is the lesser evil.
+    const availH = Math.max(cssH * 0.5, cssH - insets.top - insets.bottom);
+    const top = Math.min(insets.top, cssH - availH);
+    scale = Math.min(cssW / WIDTH, availH / HEIGHT);
     if (!(scale > 0)) scale = 1;
     offX = (cssW - WIDTH * scale) / 2;
-    offY = (cssH - HEIGHT * scale) / 2;
+    offY = top + (availH - HEIGHT * scale) / 2;
 
     view.x0 = -offX / scale;
     view.y0 = -offY / scale;
@@ -326,6 +353,12 @@ export function createRenderer(canvas) {
     setTransform(0, 0);
     sky.draw(ctx, view, wind, dt);
     effects.drawSky(ctx, wind);
+    // Below the field is under the HUD (see setInsets) and is bedrock, not
+    // sky: the hill must not look as if it floats over a sunset.
+    if (view.y1 > HEIGHT) {
+      ctx.fillStyle = BEDROCK_UNDER;
+      ctx.fillRect(view.x0, HEIGHT, view.x1 - view.x0, view.y1 - HEIGHT);
+    }
 
     // Robust with nothing attached and between matches: sky and ridges are a
     // complete, correct picture of an empty battlefield.
@@ -343,6 +376,34 @@ export function createRenderer(canvas) {
 
     terrain.sync(world.terrain);
     ctx.drawImage(terrain.canvas, 0, 0);
+
+    ctx.restore();
+    // The ground carries on past the edges. A screen wider than 16:9 — any
+    // landscape phone once the HUD has its insets — shows margins either side,
+    // and a hill that stops in two sheer cuts reads as a block floating in the
+    // sky. Each edge column is stretched outward and dimmed: the hill
+    // continues, and where play stops is still plain. Two drawImage calls,
+    // and they follow craters at the edge for free.
+    setTransform(effects.shake.x, effects.shake.y);
+    const tc = terrain.canvas;
+    const sx = tc.width / WIDTH;
+    if (view.x0 < 0) ctx.drawImage(tc, 0, 0, Math.max(1, sx), tc.height, view.x0, 0, -view.x0, HEIGHT);
+    if (view.x1 > WIDTH) ctx.drawImage(tc, tc.width - Math.max(1, sx), 0, Math.max(1, sx), tc.height, WIDTH, 0, view.x1 - WIDTH, HEIGHT);
+    // Dim the ground only, from each edge's surface down: tinting the whole
+    // margin drew two dark boxes in the sky either side of the field.
+    ctx.fillStyle = BEYOND_DIM;
+    if (view.x0 < 0) {
+      const y = world.terrain.surfaceAt(0);
+      ctx.fillRect(view.x0, y, -view.x0, HEIGHT - y);
+    }
+    if (view.x1 > WIDTH) {
+      const y = world.terrain.surfaceAt(WIDTH - 1);
+      ctx.fillRect(WIDTH, y, view.x1 - WIDTH, HEIGHT - y);
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, WIDTH, HEIGHT);
+    ctx.clip();
 
     if (settlePending) {
       const mid = (settleX0 + settleX1) / 2;
@@ -672,5 +733,5 @@ export function createRenderer(canvas) {
 
   resize();
 
-  return { resize, attach, onEvent, draw, setOptions, screenToWorld, worldToScreen };
+  return { resize, setInsets, attach, onEvent, draw, setOptions, screenToWorld, worldToScreen };
 }
