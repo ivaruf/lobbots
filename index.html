@@ -157,6 +157,18 @@
               </button>
             </div>
           </div>
+          <!-- An open hangar, while this device is hosting online: the code
+               a friend needs, read out or typed, and whether it is reachable
+               right now. js/ui.js shows it; js/main.js keeps it current.
+               Friends who join appear as seat cards below it. -->
+          <div id="hangar" hidden>
+            <div class="hangar-line">
+              <span class="label">Hangar code</span>
+              <span id="hangar-code" class="code-words" aria-live="polite"></span>
+              <button type="button" id="hangar-close" class="ghost small">Close</button>
+            </div>
+            <p id="hangar-status" class="blurb" aria-live="polite"></p>
+          </div>
           <div id="seats"></div>
         </div>
 
@@ -175,6 +187,8 @@
             <span class="update-sub">Tap to take it</span>
           </button>
           <div class="menu-tools">
+            <!-- The way into online play (js/net/lobby.js). -->
+            <button type="button" id="online-btn" class="ghost">Play online</button>
             <button type="button" id="exit-btn" class="ghost exit-btn" hidden>
               Back to the arcade
             </button>
@@ -182,6 +196,67 @@
           <!-- Which build is actually serving this session, asked of the
                service worker rather than baked into the HTML. -->
           <p id="build" hidden></p>
+        </div>
+      </section>
+
+      <!-- =========================== LOBBY ============================
+           Online play: open a hangar, or find a friend's by its three words.
+           Three views in one panel, and only one is ever showing:
+             choose  a callsign, and the two doors
+             pad     tapping in the three words a friend reads out
+             room    a guest's view of the hangar until the host deploys
+           A host does not wait here: it goes back to the setup screen, where
+           the rules and the crew are, and its friends turn up as seats.
+           js/net/lobby.js owns everything inside this section. -->
+      <section id="lobby" class="screen panel" hidden aria-labelledby="lobby-title">
+        <div class="plate-strip" aria-hidden="true"></div>
+        <header class="screen-head">
+          <p class="kicker" id="lobby-kicker">Play online</p>
+          <h2 id="lobby-title">Crew up</h2>
+        </header>
+
+        <div id="lobby-choose" class="lobby-view">
+          <div class="row">
+            <label class="label" for="callsign">Callsign</label>
+            <input
+              id="callsign"
+              class="field"
+              type="text"
+              maxlength="14"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="What they call you"
+            />
+          </div>
+          <div class="lobby-doors">
+            <button type="button" id="lobby-host" class="primary">Open a hangar</button>
+            <button type="button" id="lobby-join" class="primary">Join a hangar</button>
+          </div>
+          <p class="blurb lobby-fine">
+            Your friend's device talks straight to yours. A public matchmaker
+            introduces the two and sees the three words, never the game.
+          </p>
+        </div>
+
+        <div id="lobby-pad" class="lobby-view" hidden>
+          <p class="blurb">Tap the three words your friend reads out.</p>
+          <div id="pad-slots" class="code-words hero" aria-live="polite"></div>
+          <div id="pad-keys" class="pad" role="group" aria-label="Code words"></div>
+          <div class="lobby-doors">
+            <button type="button" id="pad-clear" class="ghost">Clear</button>
+            <button type="button" id="pad-go" class="primary" disabled>Join</button>
+          </div>
+        </div>
+
+        <div id="lobby-room" class="lobby-view" hidden>
+          <div id="room-code" class="code-words hero"></div>
+          <p id="room-rules" class="blurb"></p>
+          <div id="room-seats" class="rows"></div>
+        </div>
+
+        <p id="lobby-status" class="blurb" aria-live="polite"></p>
+        <div class="menu-tools">
+          <button type="button" id="lobby-back" class="ghost">Back</button>
         </div>
       </section>
 
@@ -299,6 +374,8 @@
           <h2 id="sb-title">Round results</h2>
         </header>
         <div id="sb-rows" class="rows"></div>
+        <!-- Online, the table waits for everyone; this says for whom. -->
+        <p id="sb-wait" class="blurb" hidden aria-live="polite"></p>
         <button type="button" id="sb-continue" class="primary">Continue</button>
       </section>
 
@@ -329,8 +406,11 @@
       >
         <div class="plate-strip" aria-hidden="true"></div>
         <header class="screen-head">
-          <p class="kicker">Nothing moves until you say so</p>
+          <p class="kicker" id="pause-kicker">Nothing moves until you say so</p>
           <h2 id="pause-title">Paused</h2>
+          <!-- Online, nothing here pauses: the hill belongs to everyone.
+               js/ui.js says so here and renames the buttons to match. -->
+          <p id="pause-note" class="blurb" hidden></p>
         </header>
 
         <div class="pause-opts">
@@ -351,7 +431,7 @@
           <!-- How fast the bots play: their thinking, aiming and shells, on
                their turns and for the rest of a round you are out of. Your
                own shot always flies at ×1. js/main.js keeps the number. -->
-          <div class="row">
+          <div class="row" id="bot-speed-row">
             <label class="label" for="bot-speed">Bot speed</label>
             <div class="slider">
               <input

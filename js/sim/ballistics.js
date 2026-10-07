@@ -22,12 +22,13 @@ import {
   WIDTH, HEIGHT, MECH_RADIUS, BODY_LIFT, SWEEP_STEP, TRAIL_SPACING,
   PROJECTILE_MAX_AGE, OPEN_MARGIN, SPEED_PER_POWER, WIND_UNIT,
 } from '../config.js';
+import { dsin, dcos, dtan, dhypot } from './dmath.js';
 
 /** Angle (deg, 0 right / 90 up / 180 left) and power to a launch velocity. */
 export function launchVelocity(angleDeg, power, speedScale = 1) {
   const a = (angleDeg * Math.PI) / 180;
   const v = power * SPEED_PER_POWER * speedScale;
-  return { vx: Math.cos(a) * v, vy: -Math.sin(a) * v };
+  return { vx: dcos(a) * v, vy: -dsin(a) * v };
 }
 
 /** A fresh projectile. `weapon` is a CATALOG entry, kept by reference. */
@@ -81,7 +82,7 @@ export function sweep(p, world, dt) {
 
   const dx = p.vx * dt;
   const dy = p.vy * dt;
-  const dist = Math.hypot(dx, dy);
+  const dist = dhypot(dx, dy);
   const n = Math.max(1, Math.ceil(dist / SWEEP_STEP));
   const sx = dx / n, sy = dy / n;
 
@@ -157,8 +158,8 @@ export function mechAt(mechs, x, y, r = 0) {
  */
 export function powerForElevation(dx, dyUp, elev, gravity, speedScale = 1) {
   const a = (elev * Math.PI) / 180;
-  const cos = Math.cos(a);
-  const denom = 2 * cos * cos * (dx * Math.tan(a) - dyUp);
+  const cos = dcos(a);
+  const denom = 2 * cos * cos * (dx * dtan(a) - dyUp);
   if (denom <= 0) return null;
   const v2 = (gravity * dx * dx) / denom;
   if (!(v2 > 0)) return null;
@@ -168,5 +169,5 @@ export function powerForElevation(dx, dyUp, elev, gravity, speedScale = 1) {
 /** Time of flight in a vacuum for a launch, until it returns to launch height. */
 export function hangTime(elev, power, gravity, speedScale = 1) {
   const v = power * SPEED_PER_POWER * speedScale;
-  return (2 * v * Math.sin((elev * Math.PI) / 180)) / gravity;
+  return (2 * v * dsin((elev * Math.PI) / 180)) / gravity;
 }

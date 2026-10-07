@@ -515,6 +515,9 @@ export function createUI(callbacks = {}) {
     onVolume() {},
     onBotSpeed() {},
     onSkip() {},
+    onOnline() {},
+    onCloseHangar() {},
+    onSeatsChanged() {},
     ...callbacks,
   };
 
@@ -525,6 +528,7 @@ export function createUI(callbacks = {}) {
     scoreboard: $('scoreboard'),
     shop: $('shop'),
     matchover: $('matchover'),
+    lobby: $('lobby'),
   };
   const pausePanel = $('pause');
   const pauseBtn = $('pause-btn');
@@ -544,6 +548,10 @@ export function createUI(callbacks = {}) {
   const seatLess = $('seat-less');
   const seatMore = $('seat-more');
   const deployBtn = $('deploy');
+  const onlineBtn = $('online-btn');
+  const hangarBox = $('hangar');
+  const hangarCode = $('hangar-code');
+  const hangarStatus = $('hangar-status');
 
   // HUD
   const hudTop = $('hud-top');
@@ -597,6 +605,11 @@ export function createUI(callbacks = {}) {
   const volumeOut = $('volume-out');
   const botSpeed = $('bot-speed');
   const botSpeedOut = $('bot-speed-out');
+  const botSpeedRow = $('bot-speed-row');
+  const sbWait = $('sb-wait');
+  const pauseKicker = $('pause-kicker');
+  const pauseTitle = $('pause-title');
+  const pauseNote = $('pause-note');
 
   // =========================================================================
   // Setup screen
@@ -681,12 +694,17 @@ export function createUI(callbacks = {}) {
           custom: setup.custom,
           money: setup.money,
           moneyTouched: setup.moneyTouched,
-          seats: setup.seats.map((s) => ({
-            name: s.name,
-            colorIndex: s.colorIndex,
-            isAI: s.isAI,
-            personality: s.personality,
-          })),
+          // A friend's seat is theirs for this visit only: remember the bot
+          // it stood in for, or nothing at all.
+          seats: setup.seats
+            .map((s) => (s.remote ? s.prior : s))
+            .filter(Boolean)
+            .map((s) => ({
+              name: s.name,
+              colorIndex: s.colorIndex,
+              isAI: s.isAI,
+              personality: s.personality,
+            })),
         }),
       );
     } catch {
@@ -837,8 +855,14 @@ export function createUI(callbacks = {}) {
     seatsBox.textContent = '';
     setup.seats.forEach((seat, i) => seatsBox.appendChild(seatCard(seat, i)));
     setText(seatCount, setup.seats.length);
-    seatLess.disabled = setup.seats.length <= MIN_PLAYERS;
+    seatLess.disabled = setup.seats.length <= MIN_PLAYERS || lastLocalSeat() < 0;
     seatMore.disabled = setup.seats.length >= MAX_PLAYERS;
+  }
+
+  /** The seat "one fewer" removes: the last one that is not a friend's. */
+  function lastLocalSeat() {
+    for (let i = setup.seats.length - 1; i >= 0; i--) if (!setup.seats[i].remote) return i;
+    return -1;
   }
 
   function seatCard(seat, i) {
@@ -866,7 +890,7 @@ export function createUI(callbacks = {}) {
       sw.title = `${c.name} — tap for another colour`;
       sw.setAttribute('aria-label', `Colour: ${c.name}. Tap for another.`);
       // A name nobody has typed follows its colour around.
-      if (wasAuto) {
+      if (wasAuto && !seat.remote) {
         seat.name = seat.isAI || i > 0 ? c.name : 'You';
         nameField.value = seat.name;
       }
@@ -876,6 +900,12 @@ export function createUI(callbacks = {}) {
     const nameField = el('input', 'field seat-name');
     nameField.type = 'text';
     nameField.value = seat.name;
+    // A friend's name is theirs to choose, on their own screen.
+    if (seat.remote) {
+      nameField.readOnly = true;
+      nameField.setAttribute('aria-readonly', 'true');
+      card.classList.add('online');
+    }
     nameField.maxLength = 14;
     nameField.autocomplete = 'off';
     nameField.spellcheck = false;
@@ -885,6 +915,13 @@ export function createUI(callbacks = {}) {
       seat.autoName = false;
     });
     head.appendChild(nameField);
+
+    if (seat.remote) {
+      // Who drives it is not a choice: the friend does, from their device.
+      head.appendChild(el('span', 'tag online-tag', 'Online'));
+      card.appendChild(head);
+      return card;
+    }
 
     const kind = el('div', 'seg seg-kind');
     kind.setAttribute('role', 'group');
@@ -949,8 +986,9 @@ export function createUI(callbacks = {}) {
 
   seatLess.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (setup.seats.length <= MIN_PLAYERS) return;
-    setup.seats.pop();
+    const i = lastLocalSeat();
+    if (setup.seats.length <= MIN_PLAYERS || i < 0) return;
+    setup.seats.splice(i, 1);
     setup.seatsTouched = true;
     renderSeats();
   });
@@ -970,6 +1008,8 @@ export function createUI(callbacks = {}) {
       colorIndex: s.colorIndex,
       isAI: s.isAI,
       personality: s.personality,
+      // The device that drives this seat, for an online match; null is here.
+      remote: s.remote || null,
       // Teams are designed for and not built (ARCHITECTURE §1); every seat is
       // its own side until they are.
       team: null,
@@ -977,6 +1017,86 @@ export function createUI(callbacks = {}) {
     const settings = resolveSettings(setup.preset, { rounds: setup.rounds, startMoney: setup.money });
     cb.onStart(specs, settings);
   });
+
+  onlineBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    cb.onOnline();
+  });
+  $('hangar-close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    cb.onCloseHangar();
+  });
+
+  /*
+   * While a hangar is open, guests see the host's setup as it changes. One
+   * watcher rather than a call in every handler: it listens in the capture
+   * phase, because the handlers stop propagation, and reports after they
+   * have run.
+   */
+  let changeQueued = false;
+  const seatsChanged = () => {
+    if (changeQueued) return;
+    changeQueued = true;
+    setTimeout(() => {
+      changeQueued = false;
+      cb.onSeatsChanged();
+    }, 0);
+  };
+  screens.setup.addEventListener('click', seatsChanged, true);
+  screens.setup.addEventListener('input', seatsChanged, true);
+
+  // ---- friends' seats (online) --------------------------------------------
+
+  /**
+   * A friend joined: they take the last bot's seat, so a crew of four stays a
+   * crew of four, or a new seat when there is no bot to stand in for. The bot
+   * is remembered and comes back if they leave. False when the table is full.
+   */
+  function addRemoteSeat(id, name) {
+    let i = -1;
+    for (let k = setup.seats.length - 1; k >= 0; k--) {
+      if (setup.seats[k].isAI && !setup.seats[k].remote) { i = k; break; }
+    }
+    if (i < 0) {
+      if (setup.seats.length >= MAX_PLAYERS) return false;
+      setup.seats.push(makeSeat(setup.seats.length));
+      i = setup.seats.length - 1;
+      setup.seats[i].prior = null;
+    } else {
+      setup.seats[i] = { ...setup.seats[i], prior: { ...setup.seats[i] } };
+    }
+    Object.assign(setup.seats[i], { remote: id, isAI: false, name, autoName: false });
+    setup.seatsTouched = true;
+    renderSeats();
+    return true;
+  }
+
+  function removeRemoteSeat(id) {
+    const i = setup.seats.findIndex((s) => s.remote === id);
+    if (i < 0) return;
+    const prior = setup.seats[i].prior;
+    if (prior) setup.seats[i] = prior;
+    else setup.seats.splice(i, 1);
+    while (setup.seats.length < MIN_PLAYERS) setup.seats.push(makeSeat(setup.seats.length));
+    renderSeats();
+  }
+
+  /** What a guest's lobby shows: the crew and the rules, from `forId`'s seat. */
+  function roomSummary(forId) {
+    const rounds = setup.rounds === 1 ? '1 round' : `${setup.rounds} rounds`;
+    const preset = (PRESETS[setup.preset] || PRESETS.default).label;
+    const host = setup.seats.find((s) => !s.isAI && !s.remote);
+    return {
+      host: host ? (host.name || '').trim() || 'The host' : 'The host',
+      rules: `${preset} rules · ${rounds} · ${comma(setup.money)} bolts to start`,
+      seats: setup.seats.map((s) => ({
+        name: (s.name || '').trim() || PALETTE[s.colorIndex].name,
+        colorIndex: s.colorIndex,
+        kind: s.remote ? 'online' : s.isAI ? 'bot' : 'host',
+        you: !!forId && s.remote === forId,
+      })),
+    };
+  }
 
   // =========================================================================
   // HUD
@@ -1291,6 +1411,8 @@ export function createUI(callbacks = {}) {
 
   function showScoreboard(match) {
     setText(sbTitle, `Round ${match.round} results`);
+    sbWait.hidden = true;
+    sbContinue.disabled = false;
     sbRows.textContent = '';
     // Best round first: the scoreboard is the one moment the table is not in
     // seat order, because what everyone wants to know is who just had a good
@@ -1351,10 +1473,11 @@ export function createUI(callbacks = {}) {
   let shopRefs = [];
   let shopIsBot = false;
 
-  function showShop(match) {
+  /** `watch`: somebody else's turn at the counter, on their own screen. */
+  function showShop(match, { watch = false } = {}) {
     const p = match.shopper();
     if (!p) return;
-    shopIsBot = !!p.isAI;
+    shopIsBot = !!p.isAI || watch;
     shopSwatch.style.background = p.color.hex;
     screens.shop.style.setProperty('--c', p.color.hex);
     setText(shopName, p.name);
@@ -1397,7 +1520,7 @@ export function createUI(callbacks = {}) {
 
     // A bot's turn at the counter is something to watch, not to press.
     shopBotLine.hidden = !shopIsBot;
-    if (shopIsBot) setText(shopBotLine, `${p.name} is looking at the shelves…`);
+    if (shopIsBot) setText(shopBotLine, watch ? `${p.name} is at the counter on their own screen…` : `${p.name} is looking at the shelves…`);
     shopDone.hidden = shopIsBot;
 
     updateShop(match);
@@ -1591,6 +1714,79 @@ export function createUI(callbacks = {}) {
 
     showHud() {
       show('hud');
+    },
+
+    /** The online lobby panel (js/net/lobby.js fills it). */
+    showLobby() {
+      show('lobby');
+    },
+
+    /** The setup screen exactly as it was left, open hangar and all. */
+    returnToSetup() {
+      renderSeats();
+      show('setup');
+    },
+
+    /**
+     * The open hangar on the setup screen: { words, status, tone } while
+     * hosting, null when it closes (and every friend's seat goes with it).
+     */
+    setHangar(info) {
+      hangarBox.hidden = !info;
+      onlineBtn.hidden = !!info;
+      if (!info) {
+        for (const seat of setup.seats.slice()) if (seat.remote) removeRemoteSeat(seat.remote);
+        return;
+      }
+      hangarCode.textContent = '';
+      for (const w of info.words) hangarCode.appendChild(el('span', 'code-word', w.toUpperCase()));
+      hangarCode.setAttribute('aria-label', info.words.join(' '));
+      setText(hangarStatus, info.status || '');
+      hangarStatus.className = info.tone ? `blurb ${info.tone}` : 'blurb';
+    },
+    /** The host's callsign goes on the first seat that is still "You". */
+    setHostName(name) {
+      const seat = setup.seats.find((s) => !s.isAI && !s.remote);
+      if (seat && (seat.autoName || seat.name === 'You')) {
+        seat.name = name;
+        seat.autoName = false;
+        renderSeats();
+      }
+    },
+    addRemoteSeat,
+    removeRemoteSeat,
+    roomSummary,
+
+    /** Online results: who the table is waiting on, and whether we tapped. */
+    setWaiting(names, tapped) {
+      const text = names && names.length ? `Waiting for ${names.join(', ')}` : '';
+      sbWait.hidden = !text;
+      setText(sbWait, text);
+      sbContinue.disabled = !!tapped;
+    },
+
+    /**
+     * The pause panel, online: 'host' or 'guest', or null for hot-seat. A
+     * hill shared with other screens cannot be stopped from this one, so the
+     * panel says so and nothing on it pretends otherwise (hub §2) — and the
+     * bot speed, which is the host's, is not offered to a guest.
+     */
+    setOnline(role) {
+      const online = !!role;
+      setText(pauseKicker, online ? 'Online — the hill keeps going' : 'Nothing moves until you say so');
+      setText(pauseTitle, online ? 'Still in the fight' : 'Paused');
+      pauseNote.hidden = !online;
+      setText(
+        pauseNote,
+        role === 'host'
+          ? 'Everyone else is still playing. Bot speed here is for the whole match.'
+          : role === 'guest'
+            ? 'Everyone else is still playing, and your controls still work.'
+            : '',
+      );
+      botSpeedRow.hidden = role === 'guest';
+      setText(resumeBtn, online ? 'Back to the hill' : 'Resume');
+      setText(quitBtn, role === 'host' ? 'End match for everyone' : role === 'guest' ? 'Leave match' : 'Power down');
     },
     updateHud,
     lockControls,

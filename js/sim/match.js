@@ -166,6 +166,7 @@ export class Match {
       case 'move': return this.applyMove(action);
       case 'buy': return this.applyBuy(action);
       case 'ready': return this.applyReady(action);
+      case 'autopilot': return this.applyAutopilot(action);
       default: return false;
     }
   }
@@ -244,6 +245,29 @@ export class Match {
     return false;
   }
 
+  /**
+   * A person has left an online match (js/net/): from this moment a bot
+   * drives their seat. It arrives as an action like any other, so every device
+   * applies it at the same tick and the bot's first decision — drawn from the
+   * match rng — is the same decision everywhere. Mid-turn it takes over at
+   * once, the way beginTurn would have planned for it; mid-shop it buys and
+   * the counter moves on.
+   */
+  applyAutopilot(a) {
+    const p = this.player(a.playerId);
+    if (!p || p.isAI) return false;
+    p.isAI = true;
+    if (this.state === 'aim' && p.id === this.currentId) {
+      this.timeLeft = 0;
+      this.planAiTurn(p);
+    } else if (this.state === 'shop' && p.id === this.shopperId) {
+      for (const itemId of AI.shop(p, this.rng)) this.buy(p, itemId);
+      this.shopDwell = AI_SHOP_DWELL;
+    }
+    this.events.push({ type: 'autopilot', playerId: p.id });
+    return true;
+  }
+
   // -------------------------------------------------------------------------
   // Rounds
   // -------------------------------------------------------------------------
@@ -310,18 +334,21 @@ export class Match {
       this.events.push({ type: 'windChanged', wind: this.world.wind });
     }
     this.timeLeft = !p.isAI && this.settings.shotTimer > 0 ? this.settings.shotTimer : 0;
-    if (p.isAI) {
-      this.thinkTimer = range(this.rng, AI_THINK_MIN, AI_THINK_MAX);
-      const plan = AI.decide(this.world, p, this.rng);
-      // No target left (everyone else fell in a hole this turn): the round
-      // check at the end of the turn will catch it; fire a harmless shell up.
-      this.aiPlan = plan || { weaponId: 'shell', angle: 90, power: 30, targetId: null };
-      // Bots cannot fire what they do not own; the shop is the only source.
-      if (this.ammo(p, this.aiPlan.weaponId) <= 0) this.aiPlan = { ...this.aiPlan, weaponId: 'shell', moveX: undefined };
-      this.selectWeapon(p, this.aiPlan.weaponId);
-      this.mirrorAim(p);
-    }
+    if (p.isAI) this.planAiTurn(p);
     this.events.push({ type: 'turnStart', playerId: p.id, seat, isAI: p.isAI, timeLeft: this.timeLeft });
+  }
+
+  /** A bot's turn: think for a moment, then the plan stepAim carries out. */
+  planAiTurn(p) {
+    this.thinkTimer = range(this.rng, AI_THINK_MIN, AI_THINK_MAX);
+    const plan = AI.decide(this.world, p, this.rng);
+    // No target left (everyone else fell in a hole this turn): the round
+    // check at the end of the turn will catch it; fire a harmless shell up.
+    this.aiPlan = plan || { weaponId: 'shell', angle: 90, power: 30, targetId: null };
+    // Bots cannot fire what they do not own; the shop is the only source.
+    if (this.ammo(p, this.aiPlan.weaponId) <= 0) this.aiPlan = { ...this.aiPlan, weaponId: 'shell', moveX: undefined };
+    this.selectWeapon(p, this.aiPlan.weaponId);
+    this.mirrorAim(p);
   }
 
   fireNow(p, weaponId, angle, power) {

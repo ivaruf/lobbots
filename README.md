@@ -85,6 +85,40 @@ Once no human is left standing in a round, **Skip to results** appears in the
 top bar: the rest of the round is played out at once, to exactly the result
 watching it would have shown, and you go straight to the scoreboard.
 
+## Online
+
+Two or more devices, anywhere, one match. On the setup screen tap **Play
+online**, give yourself a callsign, and either:
+
+- **Open a hangar.** You get three words — say, KITE GEAR MOON — and go back
+  to the setup screen with them shown above your crew. Read them to a friend.
+  Each friend who joins takes the place of one of your bots (or a new seat if
+  there are none), and their seat card says Online. Set the rules and the
+  rest of the crew as usual, then **Deploy crew**.
+- **Join a hangar.** Tap in the three words. You see the host's crew and
+  rules and wait for them to deploy.
+
+During the match everyone plays their own seats on their own screen and
+watches the rest. The pause menu does not pause — the hill is everyone's —
+and the results table waits until every device has tapped Continue. Somebody
+who leaves or loses their connection is handed to a bot, and the match goes
+on. **Again** at the end puts everyone back in the hangar for another.
+
+The honest limits, the same as every online game in the hub:
+
+- **The host must keep the page open.** The match runs on their device.
+  Their screen is kept awake while a hangar is open, and the match keeps
+  running if they switch tabs, but closing it ends the match for everyone.
+- **About one pair of networks in ten cannot connect at all.** There is no
+  relay server (TURN) behind this, because that costs money by the gigabyte.
+- **A public matchmaker introduces the devices** (PeerJS's free broker). It
+  sees the three words and connection details, never the game. If it is
+  down, no new hangars open; matches already under way are unaffected.
+  If it cannot be reached, a hangar still works between tabs of one browser,
+  and says so.
+- **No joining mid-match**, and the host can cheat, because the host decides.
+  For friends and family, that is fine.
+
 ## Move
 
 Not in the original: a Move, bought in the shop like ammunition, spends your
@@ -106,14 +140,17 @@ js/ui.js       setup, HUD, shop, scoreboard, pause — DOM over the canvas
 js/input.js    keyboard and pointer -> "angle +1", "fire"
 js/audio.js    the rendered Sonic Pi cues
 js/main.js     fixed-step loop and the wiring between all of the above
+js/net/        online: the hangar, the host's deciding Match, every device's copy
 ```
 
 The sim is a machine that eats actions (`fire`, `buy`, `ready`, `aim`) and
 emits events; the UI and the AI both drive it through the same `apply()`.
-Every random number in the sim comes from a seeded generator, so a match
-replays from its seed. That is the shape a host-authoritative peer-to-peer
-version (fishtank's, see the hub) will need: a host runs the Match, guests
-send decisions.
+Every random number in the sim comes from a seeded generator, and every
+sine, cosine and exponential is computed by hand (`js/sim/dmath.js`) because
+browsers disagree about `Math.cos` in the last bit. So a match replays
+exactly from its seed and its decisions, on any device — which is what online
+play is built on: the host runs the deciding Match, every device runs a copy,
+and only decisions travel (`js/net/`).
 
 Terrain is columns of solid spans, not a heightmap, so burrowers tunnel and
 overhangs exist. Three settling modes: static, crumble (unsupported ground
@@ -124,10 +161,11 @@ falls) and collapse (crumble plus surface flow).
 ```sh
 node --check js/**/*.js js/*.js       # syntax
 node tools/sim-smoke.mjs              # four bot matches through rounds, shop and hills, headless
+node tools/net-smoke.mjs              # online matches over in-memory pipes: in step, knocked out of step, someone leaving
 ```
 
-The smoke test is the only automated check. Everything visual is verified by
-playing it.
+The two smoke tests are the only automated checks. Everything visual is
+verified by playing it.
 
 ## Assets
 
@@ -152,4 +190,6 @@ Menu transitions and idle animation respect reduced-motion preferences.
 - **Mechs walk only when you pay for it.** They stand, fall when the ground
   goes, and lean with the slope; a bought Move is the one way to change
   ground. They never slide or tip over. This is still artillery.
-- **No multiplayer yet.** The sim is shaped for it; nothing is wired.
+- **Online play sends decisions, not the battle.** Every device runs the
+  same Match and only angles, powers, purchases and the host's clock travel.
+  See ARCHITECTURE.md §13.

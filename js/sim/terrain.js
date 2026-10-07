@@ -30,6 +30,7 @@ import {
   SPAWN_MARGIN, FOOT_W,
 } from '../config.js';
 import { range, int } from './rng.js';
+import { dcos, dexp, dhypot } from './dmath.js';
 
 const EPS = 0.01;
 
@@ -83,7 +84,7 @@ export class Terrain {
         const fx = x / o.wavelength;
         const i = Math.floor(fx);
         const f = fx - i;
-        const s = (1 - Math.cos(f * Math.PI)) * 0.5;
+        const s = (1 - dcos(f * Math.PI)) * 0.5;
         let v = o.lattice[i] * (1 - s) + o.lattice[i + 1] * s;
         // Ridged: fold the noise so troughs become sharp crests.
         if (p.ridged) v = 1 - 2 * Math.abs(v);
@@ -97,12 +98,12 @@ export class Terrain {
     const shapeAt = (x) => {
       if (p.shape === 'valley') {
         const d = (x - cx) / (W * 0.28);
-        return -0.26 * Math.exp(-d * d);
+        return -0.26 * dexp(-d * d);
       }
       if (p.shape === 'canyon') {
         const d = (x - cx) / 70;
         // Plateaus either side, a slot you can lose a shell in.
-        return 0.12 - 0.5 * Math.exp(-d * d * d * d);
+        return 0.12 - 0.5 * dexp(-d * d * d * d);
       }
       return 0;
     };
@@ -214,7 +215,7 @@ export class Terrain {
     const r = this.groundBelow(x + 3, y - 40);
     // Tangent along the surface, normal is its perpendicular pointing up.
     const tx = 6, ty = r - l;
-    const len = Math.hypot(tx, ty) || 1;
+    const len = dhypot(tx, ty) || 1;
     let nx = ty / len, ny = -tx / len;
     if (ny > 0) { nx = -nx; ny = -ny; }
     // If we struck a ceiling (solid above, air below), flip it.
@@ -225,7 +226,7 @@ export class Terrain {
   /** Does the straight segment cross ground? Sampled every 4 px. */
   segmentBlocked(x0, y0, x1, y1) {
     const dx = x1 - x0, dy = y1 - y0;
-    const len = Math.hypot(dx, dy);
+    const len = dhypot(dx, dy);
     const n = Math.max(1, Math.ceil(len / 4));
     for (let i = 1; i < n; i++) {
       const t = i / n;

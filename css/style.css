@@ -2127,3 +2127,210 @@ button:active:not(:disabled) {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ===================== online: the hangar ===================== */
+
+/*
+ * Online play (js/net/). Built from the setup screen's own parts — the same
+ * plate, the same .primary and .ghost, the same seat swatch — so the hangar
+ * looks like the rest of the hangar. The one new thing is the code, and the
+ * code is the whole point of the screen: three words, set like stencilled
+ * plates, big enough to read out across a room.
+ */
+
+.code-words {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.code-word {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 130px;
+  padding: 5px 8px;
+  border: 1px solid rgba(167, 217, 232, 0.45);
+  border-radius: 8px;
+  background: rgba(167, 217, 232, 0.1);
+  color: var(--text);
+  font-family: var(--head);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+.code-word.empty {
+  color: var(--muted);
+  border-style: dashed;
+}
+.code-words.hero {
+  margin: 4px 0;
+}
+.code-words.hero .code-word {
+  padding: 12px 8px;
+  font-size: 22px;
+  box-shadow: 0 0 22px rgba(167, 217, 232, 0.14);
+}
+
+/* The open hangar on the setup screen, above the seats it fills. */
+#hangar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(167, 217, 232, 0.35);
+  border-radius: 10px;
+  background: rgba(167, 217, 232, 0.06);
+}
+.hangar-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hangar-line .code-words {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+.ghost.small {
+  min-height: 34px;
+  padding: 4px 10px;
+  flex: 0 0 auto;
+}
+.blurb.live {
+  color: var(--accent);
+}
+.blurb.warn {
+  color: #f0b36a;
+}
+
+/* A friend's seat: the name is theirs and the kind is not a choice. */
+.seat.online .seat-name {
+  background: transparent;
+  box-shadow: none;
+}
+.online-tag {
+  flex: 0 0 auto;
+  color: var(--accent);
+  background: rgba(167, 217, 232, 0.16);
+}
+
+/* The lobby panel. */
+#lobby {
+  width: min(480px, calc(100% - 20px));
+}
+.lobby-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.lobby-view .field {
+  flex: 1 1 auto;
+}
+/* Two doors of equal standing: one size, side by side (hub §2). */
+.lobby-doors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.lobby-doors .primary {
+  min-width: 0;
+}
+.lobby-fine {
+  text-align: center;
+}
+#lobby-status {
+  text-align: center;
+}
+
+/* The keypad: twelve words, one size, in a grid so they stay equal. */
+.pad {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.pad button {
+  min-height: var(--tap);
+  padding: 4px 2px;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  background: rgba(21, 24, 30, 0.72);
+  color: var(--text);
+  font-family: var(--head);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.pad button:hover {
+  background: rgba(58, 65, 77, 0.8);
+  border-color: var(--accent);
+}
+
+/* A guest's crew list. */
+.room-seat {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--c);
+  border-radius: 8px;
+  background: rgba(21, 24, 30, 0.6);
+}
+.room-seat .swatch {
+  background: var(--c);
+}
+.room-seat b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-seat .tag:not(.won) {
+  color: var(--muted);
+  background: rgba(154, 163, 178, 0.12);
+}
+
+#sb-wait {
+  text-align: center;
+}
+
+/* Sideways phone: the lobby must not scroll (hub §2). The heading goes —
+   the kicker already says which step this is — the keypad turns six wide,
+   and the guest's code sits beside the crew rather than above it. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #lobby {
+    width: min(680px, calc(100% - 20px));
+    gap: 6px;
+    padding: 12px 14px 10px;
+  }
+  #lobby h2 {
+    display: none;
+  }
+  #lobby .lobby-view {
+    gap: 6px;
+  }
+  .pad {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 5px;
+  }
+  .pad button,
+  #lobby .primary,
+  #lobby .ghost {
+    min-height: 38px;
+  }
+  .code-words.hero .code-word {
+    padding: 6px 8px;
+    font-size: 18px;
+  }
+  #lobby-room {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: 'code seats' 'rules seats';
+    align-items: start;
+  }
+  #room-code { grid-area: code; }
+  #room-rules { grid-area: rules; }
+  #room-seats { grid-area: seats; max-height: 52vh; }
+}

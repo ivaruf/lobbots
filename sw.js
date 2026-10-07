@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.2.6'; // the whole hill above the controls on a sideways phone, and a shop you can see
+const VERSION = 'v0.3.0'; // online: open a hangar, read three words to a friend, lob at each other over the internet
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is
@@ -53,6 +53,22 @@ const ASSETS = [
   './js/sim/world.js',
   './js/sim/ai.js',
   './js/sim/match.js',
+  './js/sim/dmath.js',
+  './js/sim/checkpoint.js',
+  // Online. Only fetched by the page once somebody taps Play online, but
+  // precached like everything else so one deploy is one coherent set: a
+  // replica one version ahead of the sim it replays would drift on turn one.
+  // vendor/peerjs.js is not listed — it is the fallback behind a CDN and
+  // only matters with a network anyway; the fetch handler keeps it if used.
+  './js/net/lobby.js',
+  './js/net/session.js',
+  './js/net/replica.js',
+  './js/net/authority.js',
+  './js/net/authority-worker.js',
+  './js/net/protocol.js',
+  './js/net/codes.js',
+  './js/net/rendezvous.js',
+  './js/net/webrtc.js',
   './js/render/render.js',
   './js/render/sky.js',
   './js/render/terrain-draw.js',

@@ -24,6 +24,7 @@
  */
 
 import { sweep } from './ballistics.js';
+import { dhypot } from './dmath.js';
 import { range, gauss } from './rng.js';
 
 // ---------------------------------------------------------------------------
@@ -381,7 +382,7 @@ export const FLIGHT = {
       if (hit.type === 'terrain' && !st.burrowing && !st.done) {
         st.burrowing = true;
         p.ignoreTerrain = true;
-        const len = Math.hypot(p.vx, p.vy) || 1;
+        const len = dhypot(p.vx, p.vy) || 1;
         st.dx = p.vx / len;
         st.dy = p.vy / len;
         st.travelled = 0;

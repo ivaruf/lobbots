@@ -22,6 +22,7 @@ import { Terrain, chooseProfile } from './terrain.js';
 import { launchVelocity, makeProjectile, mechAt } from './ballistics.js';
 import { FLIGHT, IMPACT, weaponById } from './weapons.js';
 import { range, shuffle } from './rng.js';
+import { dsin, dcos, dhypot, datan2 } from './dmath.js';
 
 export class World {
   /**
@@ -143,8 +144,8 @@ export class World {
   muzzle(mech, angleDeg) {
     const a = (angleDeg * Math.PI) / 180;
     return {
-      x: mech.x + Math.cos(a) * BARREL_LEN,
-      y: mech.y - BODY_LIFT - Math.sin(a) * BARREL_LEN,
+      x: mech.x + dcos(a) * BARREL_LEN,
+      y: mech.y - BODY_LIFT - dsin(a) * BARREL_LEN,
     };
   }
 
@@ -333,7 +334,7 @@ export class World {
       for (const m of this.mechs) {
         if (!m.alive) continue;
         const cx = m.x, cy = m.y - BODY_LIFT;
-        const d = Math.hypot(cx - x, cy - y);
+        const d = dhypot(cx - x, cy - y);
         if (d > R + MECH_RADIUS) continue;
         let f = 1 - Math.max(0, d - MECH_RADIUS) / R;
         if (f <= 0) continue;
@@ -547,7 +548,7 @@ export class World {
     const h = FOOT_W / 2;
     const l = this.terrain.groundBelow(m.x - h, m.y - 30);
     const r = this.terrain.groundBelow(m.x + h, m.y - 30);
-    let tilt = Math.atan2(r - l, FOOT_W);
+    let tilt = datan2(r - l, FOOT_W);
     if (tilt > 0.35) tilt = 0.35;
     if (tilt < -0.35) tilt = -0.35;
     m.tilt = tilt;

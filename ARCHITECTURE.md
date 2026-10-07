@@ -63,6 +63,18 @@ tankwars/
       world.js              one round: mechs, projectiles, wind, terrain, step [sim]
       ai.js                 shared aiming logic + seven personality parameter sets [sim]
       match.js              players, turn order, rounds, economy, shop, state machine [sim]
+      dmath.js              sin/cos/tan/exp/atan2/hypot, identical on every engine [sim]
+      checkpoint.js         a Match as text and back; its state fingerprint  [sim]
+    net/                    online play (§13); imported on first use, never at boot [net]
+      lobby.js              the lobby panel: callsign, keypad, a guest's hangar
+      session.js            a hangar: host and guest ends, routing, the worker
+      authority.js          the host's deciding Match: clock, checks, ready vote
+      authority-worker.js   authority.js in a Web Worker
+      replica.js            this device's copy, stepped on the host's clock
+      protocol.js           the messages, the guest-input checks, big-message parts
+      codes.js              three-word hangar codes
+      rendezvous.js         how two browsers find each other (NeonFox's)
+      webrtc.js             the data channel (NeonFox's)
     render/
       render.js             camera fit, layer order, shake, offscreen markers  [render]
       sky.js                gradient + parallax clouds drifting with the wind  [render]
@@ -74,6 +86,8 @@ tankwars/
   tools/
     make-icons.py           Pillow, procedural, source of truth for icons      [assets]
     sim-smoke.mjs           headless AI-only match through node                [sim]
+    net-smoke.mjs           headless online matches over in-memory pipes       [net]
+  vendor/peerjs.js          byte-identical copy of the pinned CDN build        [net]
     audio/*.rb              the cue compositions                               [assets]
     audio/encode.sh         render + encode recipe for this game               [assets]
   README.md, ARCHITECTURE.md
@@ -154,10 +168,16 @@ fixed SIM_DT until the round is over, for the HUD's Skip to results.
 ### Determinism
 
 All sim randomness comes from `rng.js` seeded once per match; round `r` uses
-`hash(matchSeed, r)`. Sim math is plain arithmetic on numbers; `Math.sin/cos`
-appear only when turning angle+power into a velocity, once per shot. Fixed
-`SIM_DT` (1/120 s) substeps; `main.js` accumulates real time and never passes
-a variable dt into the sim.
+`hash(matchSeed, r)`. Fixed `SIM_DT` (1/120 s) substeps; `main.js`
+accumulates real time and never passes a variable dt into the sim.
+
+**Determinism across engines, not just runs.** ECMAScript fixes + − × ÷ and
+`Math.sqrt` exactly but leaves `Math.sin`, `cos`, `tan`, `exp`, `atan2` and
+`hypot` to the engine, and V8 and JavaScriptCore differ in the last bit
+(NeonFox measured it). So nothing under `js/sim/` calls them: `dmath.js`
+writes each one from the fixed operations, and online play (§13) depends on
+that. **A new `Math.` transcendental in the sim is a bug** — grep for it.
+`Math.random()` is render-side only, as before.
 
 ---
 
@@ -496,3 +516,74 @@ above, maxgear's opt-in update shape, GET_VERSION), `js/update.js` and
 `js/screen.js` (NeonFox's, adapted to the ids above), `tools/make-icons.py`
 and the four PNGs: a chunky walker on a hill, barrel raised, one shell on a
 dotted arc, hazard yellow on plate.
+
+---
+
+## 13. Online
+
+Added after M1, on the shape §3 always promised. Hub §8's rules apply; this
+section is where Lobbots departs from fishtank and NeonFox, and why.
+
+**Lockstep, not snapshots.** Every device runs the same Match. Only
+decisions travel, each stamped with the host's tick, plus the host's clock
+itself. A device never steps past the last tick the host announced, so it
+cannot run into a turn whose decision has not arrived yet. Because §3's
+determinism holds across engines, that copy IS the host's battle, and the
+renderer, audio and every screen run unchanged off this device's own events.
+NeonFox had to turn this down, because its sim used `Math.cos` and a drifting
+position eventually crosses a collision cell. Lobbots removed the cause
+instead (`dmath.js`), and it suits a turn-based game. The traffic is about a
+kilobyte a second, and nothing is packed.
+
+```
+host page  ──act──▶  authority (Web Worker)  ──a/k/h/c──▶  host's replica
+guest      ──act──▶        (over WebRTC)     ──a/k/h/c──▶  guest's replica
+```
+
+| Message | Meaning |
+|---|---|
+| `a {k, a, o, s}` | action applied after the host's k-th step; `o` is the device it came from, `s` that device's sequence number |
+| `k {k}` | the host has stepped this far |
+| `h {k, h}` | `stateHash` at a quiet turn start |
+| `c {k, s}` | full checkpoint for a device whose hash differed |
+| `wait {names}` | who the results table is waiting on |
+
+One reliable ordered lane, since every message has to land in tick order.
+`webrtc.js` still opens NeonFox's lossy lane, which is simply unused here.
+
+- **The authority runs in a Web Worker**, so a host in a background tab
+  doesn't freeze everyone (fishtank's measurement). If the worker can't
+  start, it runs in the page.
+- **Who may do what.** `protocol.cleanAction` rebuilds each guest action
+  field by field and only for seats that device owns. Turn order,
+  affordability and ammunition stay `Match.apply`'s to judge, as for any
+  other caller.
+- **Your own barrel moves at once.** An aim is applied locally and the
+  host's older echoes are skipped (`replica.js`). Fire, walk, buy and ready
+  wait for the host, because a shot leaves on the host's tick.
+- **The results table is a vote.** Online it moves on when every device
+  that still has a person playing has tapped. Hot-seat is unchanged.
+- **Leaving.** A device that goes is dropped by the authority, and its seats
+  get `match.apply({ type: 'autopilot' })`, applied at a tick like anything
+  else. Every device therefore hands the seat to the same bot at the same
+  moment. That is the one action added to `match.js` for online play.
+- **The seatbelt.** A hash at every quiet turn start, and a checkpoint at
+  the next quiet moment for any device that disagrees (`checkpoint.js`).
+  `tools/net-smoke.mjs` deliberately corrupts a guest to prove it recovers.
+  In normal play it should never fire. If the console says "out of step",
+  something has broken determinism, so look for a new `Math.` call first.
+- **A hangar, not a separate lobby, for the host.** The host goes back to
+  the setup screen, and each friend who joins replaces a bot seat there
+  (`ui.addRemoteSeat`). There is one roster editor, not two.
+- **Codes are three words** from twelve, not emoji, because §12 and the
+  stylesheet ban emoji. It has the same 1,728-code space as fishtank.
+- **Signalling** is NeonFox's, with the namespaces `lobbots-v1-` and
+  `lobbots-signal-`. The order is relay, then the PeerJS public broker,
+  then BroadcastChannel. PeerJS is pinned with SRI, with
+  `vendor/peerjs.js` behind it.
+
+Not built: joining a match already under way (the replica would need the
+whole history, or a checkpoint at the start of a turn), host migration,
+TURN, and shopping in parallel. The shop is still one player at a time,
+watched by the rest, as in hot-seat.
+

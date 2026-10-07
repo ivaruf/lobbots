@@ -18,8 +18,20 @@
  *      is showing follows the Match's state, with a couple of deliberate
  *      pauses so a round's last explosion is seen before the table appears.
  *
- * A future multiplayer client replaces (3) with a network relay and (1) with
- * a snapshot feed; nothing else here should have to change.
+ * ONLINE (js/net/) replaces exactly those two and nothing else, as the
+ * architecture always said it would. (1): the clock is the host's, and a
+ * replica steps this Match only as far as the host has announced. (3): a
+ * decision goes to the host instead of straight into match.apply, and comes
+ * back stamped with the tick it belongs to. Everything else — the renderer,
+ * the sounds, the screens — runs from this device's own Match and its own
+ * events, exactly as in hot-seat, because this device's Match IS the host's
+ * battle (protocol.js says why that holds). What online adds here is who
+ * may touch what: `mine` is the seats this device drives, and a turn that
+ * is not one of them is watched, not played.
+ *
+ * The online modules are imported the first time somebody taps Play online,
+ * never at boot: a hot-seat game must not depend on a single network file,
+ * because one failed import takes a whole module graph down (hub §2).
  */
 
 import { SIM_DT } from './config.js';
@@ -31,6 +43,7 @@ import { drawMechPortrait } from './render/mech-draw.js';
 import { createUI } from './ui.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
+import { randomSeed } from './sim/rng.js';
 
 /** Hill names for the round banner, in the game's words. */
 const HILL_NAMES = {
@@ -81,6 +94,20 @@ let botSpeed = loadBotSpeed();
 let outRound = 0;         // the round the "you are out" banner was last shown in
 let wereOut = false;
 
+/**
+ * Online. `online` is the hangar this device is in, between matches and
+ * during them: { kind: 'host'|'guest', session }. `net` is the online match
+ * in progress: { role, replica, link (host only), mine: Set of player ids }.
+ * Both null in hot-seat, which is every code path's cue to behave as before.
+ */
+let online = null;
+let net = null;
+let lobby = null;
+let netModules = null;
+let hostHealth = { reachable: true, note: '' };
+let tappedReady = false;
+let waitingNames = [];
+
 // ---------------------------------------------------------------------------
 // UI and input: intents in, actions out
 // ---------------------------------------------------------------------------
@@ -98,9 +125,13 @@ const ui = createUI({
   onResume: resume,
   onQuit: quitMatch,
   onVolume: (v) => audio.setVolume(v),
-  onSkip: skipRound,
+  onSkip: () => (net ? net.replica.send({ t: 'skip' }) : skipRound()),
+  onOnline: openLobby,
+  onCloseHangar: closeHangar,
+  onSeatsChanged: pushRoom,
   onBotSpeed: (v) => {
     botSpeed = v;
+    net?.link?.setSpeed(v);
     try { localStorage.setItem(BOT_SPEED_KEY, String(v)); } catch { /* private mode: lasts the visit */ }
   },
 });
@@ -113,9 +144,21 @@ const input = createInput(canvas, {
   onPause: togglePause,
 });
 
+/** Is this player driven from this device? Everyone is, in hot-seat. */
+function isMine(p) {
+  return !!p && (!net || net.mine.has(p.id));
+}
+
 /** The human whose turn it is, or null. Every intent goes through this. */
 function humanNow() {
-  return match && mode === 'play' && !paused && match.isHumanTurn() ? match.current() : null;
+  return match && mode === 'play' && !paused && match.isHumanTurn() && isMine(match.current()) ? match.current() : null;
+}
+
+/** A decision: into the Match here, or to the host online. */
+function act(action) {
+  if (!net) return match.apply(action);
+  net.replica.act(action);
+  return true;
 }
 
 function aimDelta({ angle = 0, power = 0 }) {
@@ -124,10 +167,10 @@ function aimDelta({ angle = 0, power = 0 }) {
   if (p.weaponId === 'move') {
     // The barrel intents walk the marker instead. A positive angle delta
     // swings the barrel LEFT (0° points right), so it walks the marker left.
-    if (angle && p.moveX !== null) match.apply({ type: 'aim', playerId: p.id, moveX: p.moveX - angle * WALK_STEP });
+    if (angle && p.moveX !== null) act({ type: 'aim', playerId: p.id, moveX: p.moveX - angle * WALK_STEP });
     return;
   }
-  match.apply({ type: 'aim', playerId: p.id, angle: p.angle + angle, power: p.power + power });
+  act({ type: 'aim', playerId: p.id, angle: p.angle + angle, power: p.power + power });
 }
 
 /** From the strip a weapon id; from the keyboard a direction to cycle. */
@@ -141,7 +184,7 @@ function selectWeapon(dirOrId) {
     weaponId = arsenal[(i + dirOrId + arsenal.length) % arsenal.length].id;
   }
   if (weaponId !== p.weaponId) {
-    match.apply({ type: 'aim', playerId: p.id, weaponId });
+    act({ type: 'aim', playerId: p.id, weaponId });
     audio.play('click', { gain: 0.6 });
   }
 }
@@ -151,21 +194,30 @@ function fire() {
   if (!p) return;
   if (p.weaponId === 'move') {
     // Refused when the first step is already a wall: nothing is spent, so
-    // say why rather than leave the button looking broken.
-    if (!match.apply({ type: 'move', playerId: p.id })) {
+    // say why rather than leave the button looking broken. Online the host
+    // decides, so ask this device's copy of the hill the same question first.
+    if (!(net ? canWalk(p) && act({ type: 'move', playerId: p.id, x: p.moveX }) : match.apply({ type: 'move', playerId: p.id }))) {
       audio.play('click', { gain: 0.5, rate: 0.7 });
       ui.banner('Cannot walk that way', 'Pick the other side, or shoot', 1100);
     }
     return;
   }
-  match.apply({ type: 'fire', playerId: p.id, weaponId: p.weaponId, angle: p.angle, power: p.power });
+  act({ type: 'fire', playerId: p.id, weaponId: p.weaponId, angle: p.angle, power: p.power });
+}
+
+/** world.walk's own refusal, asked without walking. */
+function canWalk(p) {
+  const m = match.world && match.world.mechFor(p.id);
+  if (!m || !m.alive || m.falling || p.moveX === null) return false;
+  const preview = match.world.walkPreview(p.id, p.moveX);
+  return !!preview && preview.x !== Math.round(m.x);
 }
 
 function buy(itemId) {
   if (!match || match.state !== 'shop') return;
   const shopper = match.shopper();
-  if (!shopper || shopper.isAI) return;
-  if (!match.apply({ type: 'buy', playerId: shopper.id, itemId })) {
+  if (!shopper || shopper.isAI || !isMine(shopper)) return;
+  if (!act({ type: 'buy', playerId: shopper.id, itemId })) {
     audio.play('click', { gain: 0.5, rate: 0.7 });
   }
 }
@@ -173,15 +225,21 @@ function buy(itemId) {
 /** CONTINUE, DONE and AGAIN are all "the human is ready"; what it means depends on the state. */
 function ready() {
   if (!match) return;
-  if (match.state === 'matchOver') { backToSetup(); return; }
+  if (match.state === 'matchOver') { net ? finishOnline() : backToSetup(); return; }
   if (match.state === 'scoreboard') {
-    const h = match.humans()[0];
-    if (h) match.apply({ type: 'ready', playerId: h.id });
+    // Online the table waits for every device, so this is a vote, cast once.
+    const h = match.humans().find(isMine);
+    if (!h || (net && tappedReady)) return;
+    if (net) {
+      tappedReady = true;
+      ui.setWaiting(waitingNames, true);
+    }
+    act({ type: 'ready', playerId: h.id });
     return;
   }
   if (match.state === 'shop') {
     const s = match.shopper();
-    if (s && !s.isAI) match.apply({ type: 'ready', playerId: s.id });
+    if (s && !s.isAI && isMine(s)) act({ type: 'ready', playerId: s.id });
   }
 }
 
@@ -190,12 +248,18 @@ function ready() {
 // ---------------------------------------------------------------------------
 
 function startMatch(specs, settings) {
+  if (online && online.kind === 'host') { startHostMatch(specs, settings); return; }
   lastSpecs = specs;
   lastPreset = settings.preset || 'default';
   lastRounds = settings.rounds;
-  match = new Match(settings, specs);
+  beginMatch(new Match(settings, specs));
+}
+
+/** Everything a new Match needs on this device, hot-seat or online. */
+function beginMatch(m) {
+  match = m;
   renderer.attach(match);
-  renderer.setOptions({ shake: settings.shake, trails: settings.trails });
+  renderer.setOptions({ shake: match.settings.shake, trails: match.settings.trails });
   events.length = 0;
   accumulator = 0;
   resultsTimer = 0;
@@ -203,8 +267,12 @@ function startMatch(specs, settings) {
   outRound = 0;
   wereOut = false;
   mode = 'play';
+  tappedReady = false;
+  waitingNames = [];
+  ui.setOnline(net ? net.role : null);
   ui.hidePause();
   ui.showHud();
+  net?.replica.attach(match);
   match.start(events);
   processEvents();
 }
@@ -215,22 +283,37 @@ function backToSetup() {
   input.setEnabled(false);
   ui.hidePause();
   // The last battlefield stays on the canvas behind the setup panel; a hill
-  // with craters in it is a better backdrop than an empty one.
-  ui.showSetup(lastSpecs, lastPreset, lastRounds);
+  // with craters in it is a better backdrop than an empty one. A host with
+  // a hangar open goes back to the setup exactly as it was, friends seated.
+  if (online && online.kind === 'host') ui.returnToSetup();
+  else ui.showSetup(lastSpecs, lastPreset, lastRounds);
 }
 
 function quitMatch() {
+  if (net && net.role === 'host') {
+    online.session.endMatch('The host ended the match.');
+    endNetMatch();
+  } else if (net) {
+    // A guest who leaves the match leaves the hangar: their seat goes to a
+    // bot, and the others play on.
+    leaveHangar();
+  }
   backToSetup();
 }
 
 function pause() {
-  if (mode !== 'play' || paused) return;
+  if (mode !== 'play') return;
+  // Online, the panel opens and nothing stops: the hill is everyone's, and
+  // the controls keep working underneath it (hub §2, the networked menu).
+  if (net) { ui.showPause(); return; }
+  if (paused) return;
   paused = true;
   input.setEnabled(false);
   ui.showPause();
 }
 
 function resume() {
+  if (net) { ui.hidePause(); return; }
   if (!paused) return;
   paused = false;
   ui.hidePause();
@@ -239,6 +322,7 @@ function resume() {
 
 function togglePause() {
   if (mode !== 'play') return;
+  if (net) { if (ui.paused) resume(); else pause(); return; }
   if (paused) resume();
   else pause();
 }
@@ -267,11 +351,15 @@ function react(e) {
     case 'turnStart': {
       const p = match.player(e.playerId);
       const human = !p.isAI;
-      input.setEnabled(human && !paused);
-      ui.lockControls(!human);
-      if (human) {
-        // Hot-seat: say whose go it is when there is more than one human to confuse.
-        if (match.humans().length > 1) ui.banner(`${p.name}, your turn`, 'Angle, power, fire', 1400);
+      const mine = human && isMine(p);
+      input.setEnabled(mine && !paused);
+      ui.lockControls(!mine);
+      if (mine) {
+        // Hot-seat: say whose go it is when there is more than one human to
+        // confuse. Online: always, because the turn came from somewhere else.
+        if (net || match.humans().length > 1) ui.banner(`${p.name}, your turn`, 'Angle, power, fire', 1400);
+      } else if (human) {
+        ui.banner(`${p.name} is aiming`, 'On their own screen', 1000);
       } else {
         const P = PERSONALITIES[p.personality];
         const walking = match.aiPlan && match.aiPlan.weaponId === 'move';
@@ -295,7 +383,7 @@ function react(e) {
     case 'walkEnd': {
       audio.play('bounce', { gain: 0.35, rate: 0.6 });
       const p = match.player(e.playerId);
-      if (e.blocked && p && !p.isAI) ui.banner('Stopped short', 'Too steep to go on', 900);
+      if (e.blocked && p && !p.isAI && isMine(p)) ui.banner('Stopped short', 'Too steep to go on', 900);
       break;
     }
     case 'deathBlast': {
@@ -337,6 +425,8 @@ function react(e) {
       break;
     }
     case 'roundOver': {
+      tappedReady = false;
+      waitingNames = [];
       input.setEnabled(false);
       ui.lockControls(true);
       const winner = e.winnerId ? match.player(e.winnerId) : null;
@@ -353,8 +443,13 @@ function react(e) {
     case 'shopOpen': {
       // A bot has already bought everything by the time this arrives; the
       // list is held for a beat so the humans can read what to fear.
-      if (e.isAI) ui.showBotShopping(match, match.lastPurchases.slice());
-      else ui.showShop(match);
+      showShopFor(match.shopper());
+      break;
+    }
+    case 'autopilot': {
+      const p = match.player(e.playerId);
+      if (p) ui.banner(`${p.name} dropped out`, 'A bot has the controls', 1600);
+      if (match.state === 'shop' && match.shopperId === e.playerId) showShopFor(p);
       break;
     }
     case 'purchase': {
@@ -375,6 +470,292 @@ function react(e) {
     default: break;
   }
 }
+
+/** The parts counter for whoever is at it: theirs to use, a bot's, or a friend's to watch. */
+function showShopFor(p) {
+  if (!p) return;
+  if (p.isAI) ui.showBotShopping(match, match.lastPurchases.slice());
+  else ui.showShop(match, { watch: !isMine(p) });
+}
+
+function showScoreboard() {
+  ui.showScoreboard(match);
+  if (net) ui.setWaiting(waitingNames, tappedReady);
+}
+
+/**
+ * Put every screen where the Match now is, after it jumped there without
+ * this device seeing each step: a fast-forward, or a checkpoint from the
+ * host. The renderer is told it is a new hill, which redraws the ground in
+ * full and drops smoke that belonged to the old one.
+ */
+function resync() {
+  renderer.onEvent({ type: 'roundStart' });
+  resultsTimer = 0;
+  switch (match.state) {
+    case 'aim':
+    case 'firing': {
+      ui.showHud();
+      const h = humanNow();
+      input.setEnabled(!!h);
+      ui.lockControls(!h || match.state === 'firing');
+      break;
+    }
+    case 'scoreboard': showScoreboard(); break;
+    case 'shop': showShopFor(match.shopper()); break;
+    case 'matchOver': ui.showMatchOver(match); break;
+    default:
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Online: the hangar, and an online match's lifecycle
+// ---------------------------------------------------------------------------
+
+/** The network code, fetched the first time anybody asks for it. */
+function loadNet() {
+  if (!netModules) {
+    netModules = Promise.all([
+      import('./net/lobby.js'),
+      import('./net/session.js'),
+      import('./net/replica.js'),
+      import('./net/codes.js'),
+      import('./net/protocol.js'),
+    ])
+      .then(([lobbyMod, session, replica, codes, protocol]) => ({ ...lobbyMod, ...session, ...replica, ...codes, ...protocol }))
+      .catch((error) => {
+        netModules = null;
+        throw error;
+      });
+  }
+  return netModules;
+}
+
+async function openLobby() {
+  let m;
+  try {
+    m = await loadNet();
+  } catch {
+    ui.banner('Online play would not load', 'Check the connection, then try again', 2200);
+    return;
+  }
+  if (!lobby) {
+    lobby = m.createLobby({
+      onHost: hostHangar,
+      onJoin: joinHangarAs,
+      onBack: () => ui.returnToSetup(),
+      onLeave: () => {
+        leaveHangar();
+        lobby.open('You left the hangar.');
+      },
+    });
+  }
+  lobby.open();
+  ui.showLobby();
+}
+
+async function hostHangar(name) {
+  const m = await loadNet();
+  const session = await m.openHangar();
+  online = { kind: 'host', session, m };
+  hostHealth = { reachable: true, note: '' };
+  holdAwake(true);
+  session.admit = (id, guestName) =>
+    ui.addRemoteSeat(id, guestName) ? null : 'That hangar is full — ten lobbots is all a hill holds.';
+  session.onGuests = (id, gone, guestName) => {
+    if (gone) ui.removeRemoteSeat(id);
+    if (!net) ui.banner(gone ? `${guestName} left` : `${guestName} is aboard`, gone ? 'Their seat is a bot again' : '', 1300);
+    hangarStatus();
+    pushRoom();
+  };
+  session.onHealth = (h) => {
+    hostHealth = h;
+    hangarStatus();
+  };
+  ui.setHostName(name);
+  hangarStatus();
+  ui.returnToSetup();
+}
+
+/** The hangar strip on the setup screen: the code, and whether it works. */
+function hangarStatus() {
+  if (!online || online.kind !== 'host') return;
+  const { session, m } = online;
+  const n = session.guests.size;
+  let status = n === 0
+    ? 'Read these three words to a friend. On their device: Play online, then Join a hangar.'
+    : `${n === 1 ? 'One friend' : `${n} friends`} aboard. Deploy when everyone is in.`;
+  let tone = n ? 'live' : '';
+  if (session.mode === 'tabs') {
+    status = `Matchmaking is out of reach (${session.detail}) — only other tabs in this browser can join.`;
+    tone = 'warn';
+  } else if (!hostHealth.reachable) {
+    status = hostHealth.note || 'Reconnecting to matchmaking…';
+    tone = 'warn';
+  }
+  ui.setHangar({ words: m.codeWords(session.code), status, tone });
+}
+
+/** Tell the guests what the hangar looks like now. Between matches only. */
+function pushRoom() {
+  if (!online || online.kind !== 'host' || net) return;
+  const { session } = online;
+  session.sendRoom((id) => ({ code: session.code, ...ui.roomSummary(id) }));
+}
+
+function closeHangar() {
+  if (!online || online.kind !== 'host') return;
+  online.session.close();
+  online = null;
+  holdAwake(false);
+  ui.setHangar(null);
+}
+
+async function joinHangarAs(code, name) {
+  const m = await loadNet();
+  const session = await m.joinHangar(code, name);
+  online = { kind: 'guest', session, m };
+  holdAwake(true);
+  const showRoom = () => {
+    lobby.showRoom({ code, ...(session.room || { seats: [], rules: '' }) });
+    if (!net) ui.showLobby();
+  };
+  session.onRoom = () => { if (!net) showRoom(); };
+  session.onStart = (msg) => startGuestMatch(msg);
+  session.onEnd = (why) => {
+    if (!net) return;
+    endNetMatch();
+    mode = 'setup';
+    input.setEnabled(false);
+    showRoom();
+    if (why) lobby.say(why, 'warn');
+  };
+  session.onStream = (msg) => net?.replica.receive(msg);
+  session.onClosed = (why) => {
+    endNetMatch();
+    online = null;
+    holdAwake(false);
+    mode = 'setup';
+    input.setEnabled(false);
+    lobby.open(why || 'The hangar closed.', 'warn');
+    ui.showLobby();
+  };
+  showRoom();
+}
+
+/** A guest leaving the hangar altogether. */
+function leaveHangar() {
+  if (!online || online.kind !== 'guest') return;
+  online.session.leave();
+  online = null;
+  endNetMatch();
+  holdAwake(false);
+}
+
+/** The host deploys: seats get ids and owners, every device gets the same Match. */
+function startHostMatch(specs, settings) {
+  const { session, m } = online;
+  const seeded = { ...settings, seed: randomSeed() };
+  const owners = {};
+  const seats = specs.map((spec, i) => {
+    const { remote, ...rest } = spec;
+    const id = `p${i}`;
+    // A friend who left between the tap and now is a bot like any other.
+    const gone = remote && !session.guests.has(remote);
+    if (!rest.isAI && !gone) owners[id] = remote || m.HOST;
+    return { ...rest, id, isAI: rest.isAI || !!gone };
+  });
+  const mine = new Set(Object.keys(owners).filter((id) => owners[id] === m.HOST));
+  const replica = m.createReplica({
+    me: m.HOST,
+    send: (msg) => net?.link?.send(msg),
+    onResync: resync,
+    onWait: onWaiting,
+  });
+  lastPreset = settings.preset || 'default';
+  lastRounds = settings.rounds;
+  net = { role: 'host', replica, link: null, mine };
+  beginMatch(new Match(seeded, seats));
+  net.link = session.startMatch({
+    settings: seeded,
+    specs: seats,
+    owners,
+    toHost: (msg) => net?.replica.receive(msg),
+    speed: botSpeed,
+  });
+}
+
+function startGuestMatch(msg) {
+  const { session, m } = online;
+  if (!msg || !msg.settings || !Array.isArray(msg.specs) || !Array.isArray(msg.mine)) return;
+  const replica = m.createReplica({
+    me: session.id,
+    send: (out) => session.send(out),
+    onResync: resync,
+    onWait: onWaiting,
+  });
+  net = { role: 'guest', replica, link: null, mine: new Set(msg.mine) };
+  try {
+    beginMatch(new Match(msg.settings, msg.specs));
+  } catch (error) {
+    console.warn('lobbots: could not build the host\'s match', error);
+    leaveHangar();
+    backToSetup();
+  }
+}
+
+function onWaiting(names) {
+  waitingNames = names;
+  if (match && match.state === 'scoreboard' && !resultsTimer) ui.setWaiting(names, tappedReady);
+}
+
+function endNetMatch() {
+  net = null;
+  ui.setOnline(null);
+  ui.setSkip(false);
+}
+
+/** "Again" on an online match over: the host's setup, or the guest's hangar. */
+function finishOnline() {
+  if (net.role === 'host') {
+    online.session.endMatch('');
+    endNetMatch();
+    backToSetup();
+    pushRoom();
+    return;
+  }
+  endNetMatch();
+  mode = 'setup';
+  input.setEnabled(false);
+  lobby.showRoom({ code: online.session.code, ...(online.session.room || { seats: [], rules: '' }) });
+  ui.showLobby();
+}
+
+/*
+ * Keep the screen on while in a hangar. A host whose phone sleeps drops off
+ * the matchmaker and its code stops working (fishtank measured it), and a
+ * guest whose phone sleeps drops the line. Refused or unsupported is fine:
+ * this is a courtesy, not a requirement. The browser releases it whenever
+ * the page is hidden, so it is asked for again on the way back.
+ */
+let wakeLock = null;
+async function holdAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock && document.visibilityState === 'visible') {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else if (!on && wakeLock) {
+      const held = wakeLock;
+      wakeLock = null;
+      await held.release();
+    }
+  } catch {
+    wakeLock = null;
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (online && !document.hidden) holdAwake(true);
+});
 
 // ---------------------------------------------------------------------------
 // The loop
@@ -445,7 +826,9 @@ function noticeOut() {
   const out = humansOut();
   if (out && !wereOut && outRound !== match.round) {
     outRound = match.round;
-    const sub = botSpeed > 1 ? `The bots settle it at ×${botSpeed}` : 'Bot speed is in the pause menu';
+    // A guest's bot speed is the host's to set, so it is not offered.
+    const sub = net && net.role === 'guest' ? 'The bots settle it'
+      : botSpeed > 1 ? `The bots settle it at ×${botSpeed}` : 'Bot speed is in the pause menu';
     ui.banner(match.humans().length > 1 ? 'Everyone is out' : 'You are out', sub, 1600);
   }
   wereOut = out;
@@ -462,7 +845,23 @@ function frame(now) {
 
   if (crumbleTimer > 0) crumbleTimer -= dt;
 
-  if (match && mode === 'play' && !paused) {
+  if (match && mode === 'play' && !paused && net) {
+    noticeOut();
+    ui.setSkip(onlyBotsLeft());
+    // The host's clock, not ours: step only as far as it has announced. A
+    // fast-forward (a hidden tab coming back, a Skip) is redrawn from the
+    // state it lands on rather than replayed event by event.
+    if (net.replica.advance(dt, events)) {
+      events.length = 0;
+      resync();
+    }
+    processEvents();
+    if (resultsTimer > 0) {
+      resultsTimer -= dt;
+      if (resultsTimer <= 0 && match.state === 'scoreboard') showScoreboard();
+    }
+    ui.updateHud(match);
+  } else if (match && mode === 'play' && !paused) {
     noticeOut();
     ui.setSkip(onlyBotsLeft());
     const speed = botsPlaying() ? botSpeed : 1;
@@ -480,7 +879,7 @@ function frame(now) {
 
     if (resultsTimer > 0) {
       resultsTimer -= dt;
-      if (resultsTimer <= 0 && match.state === 'scoreboard') ui.showScoreboard(match);
+      if (resultsTimer <= 0 && match.state === 'scoreboard') showScoreboard();
     }
     ui.updateHud(match);
   }
