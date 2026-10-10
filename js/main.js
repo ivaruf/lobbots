@@ -32,12 +32,17 @@
  * The online modules are imported the first time somebody taps Play online,
  * never at boot: a hot-seat game must not depend on a single network file,
  * because one failed import takes a whole module graph down (hub §2).
+ *
+ * WORDS. Every banner here is handed to the UI as functions that make their
+ * text with t() rather than as finished strings, so a language switch mid-
+ * banner says it again in the new language (js/i18n.js). What crosses to
+ * another device is a key — 'full', 'hostEnded' — never a sentence.
  */
 
 import { SIM_DT } from './config.js';
 import { Match } from './sim/match.js';
-import { PERSONALITIES } from './sim/ai.js';
 import { weaponById } from './sim/weapons.js';
+import { t, errText, whyText } from './i18n.js';
 import { createRenderer } from './render/render.js';
 import { drawMechPortrait } from './render/mech-draw.js';
 import { createUI } from './ui.js';
@@ -45,11 +50,6 @@ import { createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { randomSeed } from './sim/rng.js';
 
-/** Hill names for the round banner, in the game's words. */
-const HILL_NAMES = {
-  rolling: 'Rolling hills', mountains: 'Steep mountains', valley: 'Deep valley',
-  canyon: 'The canyon', chaos: 'Jagged chaos', flat: 'Mostly flat',
-};
 
 /** Real seconds between the final blast of a round and the results table. */
 const RESULTS_DELAY = 1.6;
@@ -198,7 +198,7 @@ function fire() {
     // decides, so ask this device's copy of the hill the same question first.
     if (!(net ? canWalk(p) && act({ type: 'move', playerId: p.id, x: p.moveX }) : match.apply({ type: 'move', playerId: p.id }))) {
       audio.play('click', { gain: 0.5, rate: 0.7 });
-      ui.banner('Cannot walk that way', 'Pick the other side, or shoot', 1100);
+      ui.banner(() => t('cannotWalk'), () => t('cannotWalkSub'), 1100);
     }
     return;
   }
@@ -291,7 +291,7 @@ function backToSetup() {
 
 function quitMatch() {
   if (net && net.role === 'host') {
-    online.session.endMatch('The host ended the match.');
+    online.session.endMatch('hostEnded');
     endNetMatch();
   } else if (net) {
     // A guest who leaves the match leaves the hangar: their seat goes to a
@@ -345,7 +345,9 @@ function react(e) {
   switch (e.type) {
     case 'roundStart': {
       ui.showHud();
-      ui.banner(`Round ${e.round} of ${e.rounds}`, HILL_NAMES[e.profile] || e.profile, 1800);
+      // A hill profile the table does not know shows its key: a new profile is
+      // a missing translation, and i18n.js says so in the console.
+      ui.banner(() => t('roundBanner', e.round, e.rounds), () => t(`hill.${e.profile}`), 1800);
       break;
     }
     case 'turnStart': {
@@ -357,13 +359,17 @@ function react(e) {
       if (mine) {
         // Hot-seat: say whose go it is when there is more than one human to
         // confuse. Online: always, because the turn came from somewhere else.
-        if (net || match.humans().length > 1) ui.banner(`${p.name}, your turn`, 'Angle, power, fire', 1400);
+        if (net || match.humans().length > 1) ui.banner(() => t('yourTurn', p.name), () => t('yourTurnSub'), 1400);
       } else if (human) {
-        ui.banner(`${p.name} is aiming`, 'On their own screen', 1000);
+        ui.banner(() => t('aiming', p.name), () => t('ownScreen'), 1000);
       } else {
-        const P = PERSONALITIES[p.personality];
         const walking = match.aiPlan && match.aiPlan.weaponId === 'move';
-        ui.banner(walking ? `${p.name} is on the move` : `${p.name} is aiming`, P ? P.name : 'bot', 1000);
+        const kind = p.personality;
+        ui.banner(
+          () => t(walking ? 'onTheMove' : 'aiming', p.name),
+          () => (kind ? t(`bot.${kind}`) : t('bot')),
+          1000,
+        );
       }
       break;
     }
@@ -383,17 +389,16 @@ function react(e) {
     case 'walkEnd': {
       audio.play('bounce', { gain: 0.35, rate: 0.6 });
       const p = match.player(e.playerId);
-      if (e.blocked && p && !p.isAI && isMine(p)) ui.banner('Stopped short', 'Too steep to go on', 900);
+      if (e.blocked && p && !p.isAI && isMine(p)) ui.banner(() => t('stopped'), () => t('stoppedSub'), 900);
       break;
     }
     case 'deathBlast': {
       // The wreck's own boom comes from the explosion event that follows;
       // this is only the headline. A nuke gets shouted.
       const p = match.player(e.id);
-      const w = weaponById(e.weaponId);
       if (p) {
-        if (e.weaponId === 'nuke') ui.banner(`${p.name}'s reactor goes critical`, 'NUKE', 1600);
-        else ui.banner(`${p.name}'s wreck cooks off`, w.name, 1000);
+        if (e.weaponId === 'nuke') ui.banner(() => t('reactor', p.name), () => t('nukeShout'), 1600);
+        else ui.banner(() => t('cooksOff', p.name), () => t(`w.${e.weaponId}`), 1000);
       }
       break;
     }
@@ -421,7 +426,7 @@ function react(e) {
     case 'mechDied': {
       audio.play('wreck', { gain: 0.9 });
       const p = match.player(e.id);
-      if (p) ui.banner(`${p.name} is wrecked`, e.cause === 'fall' ? 'The ground gave way' : '', 1200);
+      if (p) ui.banner(() => t('isWrecked', p.name), e.cause === 'fall' ? () => t('groundGave') : '', 1200);
       break;
     }
     case 'roundOver': {
@@ -432,9 +437,9 @@ function react(e) {
       const winner = e.winnerId ? match.player(e.winnerId) : null;
       if (winner) {
         audio.play('fanfare', { gain: 0.8 });
-        ui.banner(`${winner.name} takes the round`, '', RESULTS_DELAY * 1000);
+        ui.banner(() => t('takesRound', winner.name), '', RESULTS_DELAY * 1000);
       } else {
-        ui.banner('Nobody left standing', 'Everyone gets paid anyway', RESULTS_DELAY * 1000);
+        ui.banner(() => t('nobodyLeft'), () => t('paidAnyway'), RESULTS_DELAY * 1000);
       }
       resultsTimer = RESULTS_DELAY;
       break;
@@ -448,7 +453,7 @@ function react(e) {
     }
     case 'autopilot': {
       const p = match.player(e.playerId);
-      if (p) ui.banner(`${p.name} dropped out`, 'A bot has the controls', 1600);
+      if (p) ui.banner(() => t('droppedOut', p.name), () => t('botHasIt'), 1600);
       if (match.state === 'shop' && match.shopperId === e.playerId) showShopFor(p);
       break;
     }
@@ -461,7 +466,7 @@ function react(e) {
       break;
     }
     case 'shopClosed': break; // roundStart follows in the same batch
-    case 'timerExpired': ui.banner('Time!', 'The shot goes as it stands', 900); break;
+    case 'timerExpired': ui.banner(() => t('time'), () => t('timeSub'), 900); break;
     case 'matchOver': {
       audio.play('fanfare', { gain: 1 });
       ui.showMatchOver(match);
@@ -536,7 +541,7 @@ async function openLobby() {
   try {
     m = await loadNet();
   } catch {
-    ui.banner('Online play would not load', 'Check the connection, then try again', 2200);
+    ui.banner(() => t('netWontLoad'), () => t('netWontLoadSub'), 2200);
     return;
   }
   if (!lobby) {
@@ -546,7 +551,7 @@ async function openLobby() {
       onBack: () => ui.returnToSetup(),
       onLeave: () => {
         leaveHangar();
-        lobby.open('You left the hangar.');
+        lobby.open(() => t('youLeft'));
       },
     });
   }
@@ -561,10 +566,10 @@ async function hostHangar(name) {
   hostHealth = { reachable: true, note: '' };
   holdAwake(true);
   session.admit = (id, guestName) =>
-    ui.addRemoteSeat(id, guestName) ? null : 'That hangar is full — ten lobbots is all a hill holds.';
+    ui.addRemoteSeat(id, guestName) ? null : 'full';
   session.onGuests = (id, gone, guestName) => {
     if (gone) ui.removeRemoteSeat(id);
-    if (!net) ui.banner(gone ? `${guestName} left` : `${guestName} is aboard`, gone ? 'Their seat is a bot again' : '', 1300);
+    if (!net) ui.banner(() => t(gone ? 'left' : 'aboard', guestName), gone ? () => t('seatIsBot') : '', 1300);
     hangarStatus();
     pushRoom();
   };
@@ -582,15 +587,15 @@ function hangarStatus() {
   if (!online || online.kind !== 'host') return;
   const { session, m } = online;
   const n = session.guests.size;
-  let status = n === 0
-    ? 'Read these three words to a friend. On their device: Play online, then Join a hangar.'
-    : `${n === 1 ? 'One friend' : `${n} friends`} aboard. Deploy when everyone is in.`;
+  let status = n === 0 ? t('hangar.idle') : t('hangar.friends', n);
   let tone = n ? 'live' : '';
   if (session.mode === 'tabs') {
-    status = `Matchmaking is out of reach (${session.detail}) — only other tabs in this browser can join.`;
+    const why = session.detailError && session.detailError.key ? errText(session.detailError) : session.detail;
+    status = t('hangar.tabs', why);
     tone = 'warn';
   } else if (!hostHealth.reachable) {
-    status = hostHealth.note || 'Reconnecting to matchmaking…';
+    // The note is a key from rendezvous.js, said here in this device's words.
+    status = hostHealth.note ? t(`err.${hostHealth.note}`, ...(hostHealth.args || [])) : t('hangar.reconnecting');
     tone = 'warn';
   }
   ui.setHangar({ words: m.codeWords(session.code), status, tone });
@@ -628,7 +633,7 @@ async function joinHangarAs(code, name) {
     mode = 'setup';
     input.setEnabled(false);
     showRoom();
-    if (why) lobby.say(why, 'warn');
+    if (why) lobby.say(() => whyText(why), 'warn');
   };
   session.onStream = (msg) => net?.replica.receive(msg);
   session.onClosed = (why) => {
@@ -637,7 +642,7 @@ async function joinHangarAs(code, name) {
     holdAwake(false);
     mode = 'setup';
     input.setEnabled(false);
-    lobby.open(why || 'The hangar closed.', 'warn');
+    lobby.open(() => whyText(why || 'gone'), 'warn');
     ui.showLobby();
   };
   showRoom();
@@ -827,9 +832,11 @@ function noticeOut() {
   if (out && !wereOut && outRound !== match.round) {
     outRound = match.round;
     // A guest's bot speed is the host's to set, so it is not offered.
-    const sub = net && net.role === 'guest' ? 'The bots settle it'
-      : botSpeed > 1 ? `The bots settle it at ×${botSpeed}` : 'Bot speed is in the pause menu';
-    ui.banner(match.humans().length > 1 ? 'Everyone is out' : 'You are out', sub, 1600);
+    const speed = botSpeed;
+    const sub = net && net.role === 'guest' ? () => t('botsSettle')
+      : speed > 1 ? () => t('botsSettleAt', speed) : () => t('botSpeedWhere');
+    const title = match.humans().length > 1 ? 'everyoneOut' : 'youOut';
+    ui.banner(() => t(title), sub, 1600);
   }
   wereOut = out;
 }
@@ -950,14 +957,24 @@ ui.setBotSpeed(botSpeed);
 function wireExit() {
   const exit = window.ArcadeExit;
   if (!exit) return false;
-  const verb = exit.verb({ arcade: 'Back to the arcade', app: 'Power down' });
+  // Plain words, the same in every game (hub §2), in this device's language;
+  // wired again on every language switch below.
+  const verb = exit.verb({ arcade: t('exit.arcade'), app: t('exit.app') });
   ui.setExit(verb, () => {
     exit.quit().then((outcome) => {
-      if (outcome === 'refused') ui.banner('This window will not close itself', 'Close it from the browser', 2500);
+      if (outcome === 'refused') ui.banner(() => t('wontClose'), () => t('wontCloseSub'), 2500);
     });
   });
   return true;
 }
+
+// A language switch (js/i18n.js). js/ui.js and js/net/lobby.js repaint
+// themselves; the two things this file wrote are the exit's verb and the
+// open hangar's status line.
+document.addEventListener('arcade:lang', () => {
+  wireExit();
+  hangarStatus();
+});
 if (!wireExit()) {
   window.addEventListener('load', () => { if (!wireExit()) setTimeout(wireExit, 1500); });
 }

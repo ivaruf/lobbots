@@ -21,7 +21,18 @@
  * Nobody joins a match already under way: there is no seat for them in a
  * Match that is already built, and the replica could not catch up anyway
  * without the whole history. They are told to wait for the next one.
+ *
+ * NO SENTENCES ON THE WIRE. Every reason that crosses to another device —
+ * refused, end, bye — is a short key ('full', 'busy', 'hostEnded'), and the
+ * receiving device says it in its own language (js/i18n.js, `why.*`). The
+ * errors this file throws carry the same kind of key on `.key`; their English
+ * message is for the console.
  */
+
+/** An Error a person can be shown: the key says it, the message logs it. */
+function said(key, message) {
+  return Object.assign(new Error(message), { key });
+}
 
 import { hostRendezvous, joinRendezvous } from './rendezvous.js';
 import { newCode } from './codes.js';
@@ -104,7 +115,7 @@ export async function openHangar() {
     mode: '',
     detail: '',
     guests,
-    /** (id, name) -> null to seat them, or the reason they are turned away. */
+    /** (id, name) -> null to seat them, or the reason's key ('full'). */
     admit: null,
     /** (id, gone, name) -> a guest arrived, or went (gone true). */
     onGuests: null,
@@ -143,7 +154,7 @@ export async function openHangar() {
       };
     },
 
-    /** The match is over or abandoned; guests go back to the hangar. */
+    /** The match is over or abandoned; guests go back to the hangar. `why` is a key. */
     endMatch(why = '') {
       engine?.stop();
       engine = null;
@@ -157,7 +168,7 @@ export async function openHangar() {
       engine?.stop();
       engine = null;
       for (const g of guests.values()) {
-        g.channel.send({ t: 'bye', why: 'The host closed the hangar.' });
+        g.channel.send({ t: 'bye', why: 'closed' });
         // Give the goodbye a moment to leave before the line goes.
         setTimeout(() => g.channel.close(), 300);
       }
@@ -189,11 +200,11 @@ export async function openHangar() {
     if (msg.t === 'hello') {
       if (guests.has(id)) return;
       if (msg.v !== NET_VERSION) {
-        refuse(channel, 'You and the host are on different builds of Lobbots. Both reload and try again.');
+        refuse(channel, 'version');
         return;
       }
       if (engine) {
-        refuse(channel, 'That hangar is in the middle of a match. Try again when it is over.');
+        refuse(channel, 'busy');
         return;
       }
       const name = cleanName(msg.name);
@@ -221,6 +232,7 @@ export async function openHangar() {
   });
   session.mode = rendezvous.mode;
   session.detail = rendezvous.detail;
+  session.detailError = rendezvous.detailError || null;
   rendezvous.watch?.((health) => session.onHealth?.(health));
   return session;
 }
@@ -270,7 +282,7 @@ export async function joinHangar(code, name) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       lost('');
-      reject(new Error('The hangar never answered. Check the words, and ask your friend to keep it open.'));
+      reject(said('timeout', 'The hangar never answered.'));
     }, 12000);
     channel.onMessage = (raw) => {
       const msg = join(raw);
@@ -285,7 +297,7 @@ export async function joinHangar(code, name) {
           clearTimeout(timer);
           closed = true;
           rendezvous.close?.();
-          reject(new Error(String(msg.why || 'The hangar turned us away.')));
+          reject(Object.assign(new Error(`refused: ${msg.why}`), { why: String(msg.why || 'refused') }));
           break;
         case 'room':
           session.room = msg;
@@ -298,7 +310,7 @@ export async function joinHangar(code, name) {
           session.onEnd?.(String(msg.why || ''));
           break;
         case 'bye':
-          lost(String(msg.why || 'The host closed the hangar.'));
+          lost(String(msg.why || 'closed'));
           break;
         default:
           session.onStream?.(msg);
@@ -306,8 +318,8 @@ export async function joinHangar(code, name) {
     };
     channel.onClose = () => {
       clearTimeout(timer);
-      reject(new Error('The line to the hangar dropped.'));
-      lost('The line to the host dropped.');
+      reject(said('lineDropped', 'The line to the hangar dropped.'));
+      lost('lineHost');
     };
     channel.send({ t: 'hello', v: NET_VERSION, name });
   });

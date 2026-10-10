@@ -85,6 +85,15 @@ function loadScript(src, integrity) {
   });
 }
 
+/*
+ * An Error a person can be shown. `key` (and `args`) are what js/i18n.js
+ * renders, in whichever language this device speaks; the English message is
+ * only for the console. This file never builds a sentence for the screen.
+ */
+function said(key, message, ...args) {
+  return Object.assign(new Error(message), { key, args });
+}
+
 let loading = null;
 function loadBroker() {
   if (window.Peer) return Promise.resolve(window.Peer);
@@ -96,15 +105,13 @@ function loadBroker() {
       // Blocked or offline. The local copy is the same bytes, so this is a
       // fallback rather than a downgrade.
       await loadScript(PEERJS.local, null).catch(() => {
-        throw new Error(
-          window.navigator?.onLine === false
-            ? "You are offline, so there is no way to find the other device."
-            : "The matchmaking code could not load, from the CDN or from this site.",
-        );
+        throw window.navigator?.onLine === false
+          ? said("offline", "Offline: no way to find the other device.")
+          : said("noBroker", "The matchmaking code could not load, from the CDN or from this site.");
       });
     }
     if (!window.Peer)
-      throw new Error("The matchmaking code loaded but is unusable.");
+      throw said("brokerBroken", "The matchmaking code loaded but is unusable.");
     return window.Peer;
   })().catch((error) => {
     loading = null;
@@ -197,7 +204,7 @@ const waitFor = (peer, ms, onError) =>
   new Promise((resolve, reject) => {
     peer.on("open", resolve);
     peer.on("error", (error) => reject(onError(error)));
-    setTimeout(() => reject(new Error("Matchmaking timed out.")), ms);
+    setTimeout(() => reject(said("mmTimeout", "Matchmaking timed out.")), ms);
   });
 
 /* Take the code the host was given and start listening for guests. */
@@ -219,11 +226,9 @@ export async function hostRendezvous(code, onPeer) {
       peer,
       20000,
       (error) =>
-        new Error(
-          error.type === "unavailable-id"
-            ? "That code is already in use. Host again for a fresh one."
-            : `Matchmaking failed (${error.type}).`,
-        ),
+        error.type === "unavailable-id"
+          ? said("codeTaken", "That code is already in use.")
+          : said("mmFailed", `Matchmaking failed (${error.type}).`, error.type),
     );
     const signalling = brokerHostSignalling(peer);
     const rtc = hostOverWebRTC(signalling, onPeer);
@@ -241,14 +246,15 @@ export async function hostRendezvous(code, onPeer) {
      * reconnect cannot get out — so a slow beat looks as well.
      */
     let watchers = new Set();
-    let health = { reachable: true, note: "" };
-    const report = (reachable, note) => {
-      health = { reachable, note };
+    // `note` is a key for js/i18n.js (`err.*`) and `args` its arguments.
+    let health = { reachable: true, note: "", args: [] };
+    const report = (reachable, note, ...args) => {
+      health = { reachable, note, args };
       for (const watcher of watchers) watcher(health);
     };
     const revive = () => {
       if (peer.destroyed || !peer.disconnected) return;
-      report(false, "Reopening the hangar — the code may not work just now.");
+      report(false, "reopening");
       try {
         peer.reconnect();
       } catch {
@@ -260,9 +266,9 @@ export async function hostRendezvous(code, onPeer) {
     peer.on("error", (error) =>
       report(
         false,
-        error.type === "unavailable-id"
-          ? "Something else took this code. Host again for a fresh one."
-          : `Matchmaking trouble (${error.type}).`,
+        ...(error.type === "unavailable-id"
+          ? ["codeStolen"]
+          : ["mmTrouble", error.type]),
       ),
     );
     const beat = setInterval(revive, 5000);
@@ -290,7 +296,7 @@ export async function hostRendezvous(code, onPeer) {
     // lobby says exactly that rather than failing silently.
     const signalling = broadcastSignalling(code);
     const rtc = hostOverWebRTC(signalling, onPeer);
-    return { mode: "tabs", detail: error.message, close: rtc.close };
+    return { mode: "tabs", detail: error.message, detailError: error, close: rtc.close };
   }
 }
 
@@ -322,7 +328,7 @@ export async function joinRendezvous(code) {
   await waitFor(
     peer,
     20000,
-    (error) => new Error(`Matchmaking failed (${error.type}).`),
+    (error) => said("mmFailed", `Matchmaking failed (${error.type}).`, error.type),
   );
   const pipe = peer.connect(brokerId(code), { reliable: true });
   await new Promise((resolve, reject) => {
@@ -333,14 +339,12 @@ export async function joinRendezvous(code) {
     // is the player's own fault.
     peer.on("error", (error) =>
       reject(
-        new Error(
-          error.type === "peer-unavailable"
-            ? `No hangar found at ${spell(code)}. Check the code, and that your friend still has it open with their screen awake.`
-            : `Could not reach the game (${error.type}).`,
-        ),
+        error.type === "peer-unavailable"
+          ? said("noGame", `No hangar found at ${spell(code)}.`, code)
+          : said("unreachable", `Could not reach the game (${error.type}).`, error.type),
       ),
     );
-    setTimeout(() => reject(new Error("The host did not answer.")), 20000);
+    setTimeout(() => reject(said("hostSilent", "The host did not answer.")), 20000);
   });
   const signalling = brokerGuestSignalling(pipe);
   try {

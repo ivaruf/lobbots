@@ -59,9 +59,18 @@ function isFullscreen() {
  * the game would. Fullscreen is not part of the fiction; it is a thing the
  * browser does, it has one name everywhere, and the player already knows it.
  */
+/* Its own two words per language: this file imports nothing, js/i18n.js
+ * included, and reads the language off <html lang>, which i18n.js and the
+ * head of index.html keep current. */
+const WORDS = {
+  nb: ["Fullskjerm", "Avslutt fullskjerm"],
+  en: ["Fullscreen", "Exit fullscreen"],
+};
+
 function paint() {
   const active = isFullscreen();
-  const label = active ? "Exit fullscreen" : "Fullscreen";
+  const words = WORDS[document.documentElement.lang] || WORDS.en;
+  const label = active ? words[1] : words[0];
   button.setAttribute("aria-pressed", String(active));
   button.setAttribute("aria-label", label);
   button.title = label;
@@ -117,4 +126,6 @@ if (button && request && exit) {
   // outside the click handler too.
   document.addEventListener("fullscreenchange", paint);
   document.addEventListener("webkitfullscreenchange", paint);
+  // js/i18n.js announces a language switch; repaint the label in the new one.
+  document.addEventListener("arcade:lang", paint);
 }

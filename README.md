@@ -24,7 +24,7 @@ python3 -m http.server
 ```
 
 `file://` does not work: the game is ES modules. Serving the game directory
-alone means `../arcade/exit.js` is a 404 and the "Back to the arcade" button
+alone means `../arcade/exit.js` is a 404 and the "Back to arcade" button
 simply does not appear; serve `~/projects/games` instead to see it.
 
 ## How a match goes
@@ -88,21 +88,24 @@ watching it would have shown, and you go straight to the scoreboard.
 ## Online
 
 Two or more devices, anywhere, one match. On the setup screen tap **Play
-online**, give yourself a callsign, and either:
+online**, give yourself a name, and either:
 
-- **Open a hangar.** You get three words — say, KITE GEAR MOON — and go back
+- **Host a game.** You get three words — say, KITE GEAR MOON — and go back
   to the setup screen with them shown above your crew. Read them to a friend.
   Each friend who joins takes the place of one of your bots (or a new seat if
   there are none), and their seat card says Online. Set the rules and the
-  rest of the crew as usual, then **Deploy crew**.
-- **Join a hangar.** Tap in the three words. You see the host's crew and
-  rules and wait for them to deploy.
+  rest of the crew as usual, then **Play**.
+- **Join a game.** Tap in the three words. You see the host's crew and
+  rules and wait for them to start. The words are shown in each device's
+  own language (KITE is DRAGE in Norwegian) while the code underneath is
+  the same, so a Norwegian and an English screen show different words for
+  one game — switch both to one language to read a code across them.
 
 During the match everyone plays their own seats on their own screen and
 watches the rest. The pause menu does not pause — the hill is everyone's —
 and the results table waits until every device has tapped Continue. Somebody
 who leaves or loses their connection is handed to a bot, and the match goes
-on. **Again** at the end puts everyone back in the hangar for another.
+on. **Play again** at the end puts everyone back in the hangar for another.
 
 The honest limits, the same as every online game in the hub:
 

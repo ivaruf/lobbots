@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.3.0'; // online: open a hangar, read three words to a friend, lob at each other over the internet
+const VERSION = 'v0.4.0'; // Norwegian first, English a tap away, and menus that say Play, Back and Sound
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is
@@ -44,6 +44,7 @@ const ASSETS = [
   './js/touch-guard.js',
   './js/input.js',
   './js/ui.js',
+  './js/i18n.js',
   './js/audio.js',
   './js/config.js',
   './js/sim/rng.js',

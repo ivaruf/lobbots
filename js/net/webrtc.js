@@ -268,10 +268,10 @@ export async function joinOverWebRTC(signalling, { timeout = 15000 } = {}) {
         setTimeout(
           () =>
             reject(
-              new Error(
-                "The host never answered. Check the code — and that there is " +
-                  "no TURN here, so a few networks simply cannot reach each other.",
-              ),
+              // `key` is what js/i18n.js shows; the message is for the console.
+              Object.assign(new Error("The host never answered (no TURN)."), {
+                key: "noTurn",
+              }),
             ),
           timeout,
         ),

@@ -34,7 +34,9 @@
  * In the lobby: hello / welcome / refused / room / start / end / bye.
  */
 
-export const NET_VERSION = 1;
+// 2: reasons and the room travel as keys and numbers, never as sentences,
+// so each device can say them in its own language (js/i18n.js).
+export const NET_VERSION = 2;
 export const MAX_NAME = 14;
 
 /** The host's own device, as an owner and as an origin. */

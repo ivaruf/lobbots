@@ -23,6 +23,15 @@
  * has not moved: setting .textContent to the string it already holds still
  * costs a layout, sixty times a second, for no pixels.
  *
+ * TWO LANGUAGES, SWITCHED LIVE. Every word here comes from t() (js/i18n.js),
+ * and an `arcade:lang` repaints whatever is on screen where it stands: the
+ * setup's pills and seat cards, the HUD on its next diff, the open results,
+ * shop, standings or pause panel, and a banner still in the air. Nothing is
+ * rebuilt by navigating — no screen changes, no pause is lifted. Names are
+ * the exception: what a player typed is never translated, and a name the
+ * game chose ("Du", a colour) follows the language only until somebody
+ * changes it.
+ *
  * ICONS ARE DRAWN, NOT TYPED. Weapon icons are painted procedurally onto a
  * canvas and cached as data URLs, and the currency mark is an inline SVG nut.
  * No web fonts (hub §1), and no emoji either: an emoji is a font somebody
@@ -39,6 +48,7 @@ import {
 } from './config.js';
 import { PERSONALITIES, PERSONALITY_IDS } from './sim/ai.js';
 import { holdRate, HOLD_DELAY } from './input.js';
+import { t, num, shortNum, codeWord, getLang, setLang, variants } from './i18n.js';
 
 /** Where the last setup is remembered. Hub §6: <slug>.<thing>.v<n>. */
 const SETUP_KEY = 'lobbots.setup.v1';
@@ -46,12 +56,6 @@ const SETUP_KEY = 'lobbots.setup.v1';
 /** Starting purses offered on the setup screen. Includes every preset's own. */
 const MONEY_STEPS = [0, 500, 800, 1200, 4000, 10000];
 
-/** 1200 -> "1.2k", 800 -> "800": short enough for six pills on a phone. */
-function shortBolts(n) {
-  if (n < 1000) return String(n);
-  const k = n / 1000;
-  return `${Number.isInteger(k) ? k : k.toFixed(1)}k`;
-}
 
 // ---------------------------------------------------------------------------
 // Small shared helpers
@@ -59,11 +63,14 @@ function shortBolts(n) {
 
 const $ = (id) => document.getElementById(id);
 
-/** Thousands separators without asking Intl what country it thinks we are. */
-function comma(n) {
-  const s = String(Math.round(n));
-  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
+/** Thousands separators in this language's style (js/i18n.js num). */
+const comma = num;
+
+/** A colour's name, in the current language. */
+const colourName = (idx) => t(`color.${(PALETTE[idx] || PALETTE[0]).id}`);
+/** A weapon's name and its line, in the current language. */
+const wName = (id) => t(`w.${id}`);
+const wDesc = (id) => t(`wd.${id}`);
 
 /** Ammo reads as a number or as the shell's infinity. */
 function ammoText(n) {
@@ -644,6 +651,21 @@ export function createUI(callbacks = {}) {
     return from;
   }
 
+  /** Is this seat's name one the game chose, in either language? */
+  function isGameName(seat) {
+    const id = (PALETTE[seat.colorIndex] || PALETTE[0]).id;
+    return [...variants('you'), ...variants(`color.${id}`)].includes(seat.name);
+  }
+
+  /** A language switch: every name the game chose, said in the new language. */
+  function localiseNames() {
+    for (const seat of setup.seats) {
+      if (seat.remote || !seat.autoName) continue;
+      if (variants('you').includes(seat.name)) seat.name = t('you');
+      else if (isGameName(seat)) seat.name = colourName(seat.colorIndex);
+    }
+  }
+
   function makeSeat(i) {
     const colorIndex = freeColor(i - 1 < 0 ? PALETTE.length - 1 : i - 1, -1);
     const isAI = i > 0;
@@ -653,7 +675,7 @@ export function createUI(callbacks = {}) {
       // Personalities are dealt round the table so a default match is seven
       // different opponents rather than four copies of the Rookie.
       personality: PERSONALITY_IDS[(i - 1 + PERSONALITY_IDS.length) % PERSONALITY_IDS.length],
-      name: isAI ? PALETTE[colorIndex].name : 'You',
+      name: isAI ? colourName(colorIndex) : t('you'),
       // True while the name is still whatever we chose, so recolouring can
       // rename with it and stop the moment the player types something.
       autoName: true,
@@ -721,6 +743,9 @@ export function createUI(callbacks = {}) {
       name: String(s.name || '').slice(0, 14),
       autoName: false,
     }));
+    // A remembered "You" or colour is still the game's choice, not a name
+    // somebody typed: let it follow the language (localiseNames below).
+    for (const seat of setup.seats) seat.autoName = isGameName(seat);
     while (setup.seats.length < MIN_PLAYERS) setup.seats.push(makeSeat(setup.seats.length));
     if (PRESETS[presetId]) setup.preset = presetId;
     const r = Number(rounds);
@@ -762,62 +787,66 @@ export function createUI(callbacks = {}) {
     }
   }
 
-  buildSeg(
-    presetSeg,
-    Object.keys(PRESETS).map((id) => ({ v: id, label: PRESETS[id].label, title: PRESETS[id].blurb })),
-    (id) => {
-      setup.preset = id;
-      // The preset's rounds and seat count are a suggestion, and only for
-      // somebody who has not already said otherwise.
-      if (!setup.roundsTouched) {
-        setup.rounds = resolveSettings(id).rounds;
-        setup.custom = false;
-      }
-      if (!setup.moneyTouched) setup.money = resolveSettings(id).startMoney;
-      if (!setup.seatsTouched) {
-        defaultSeats(id);
-        renderSeats();
-      }
-      renderPreset();
-      renderRounds();
-      renderMoney();
-    },
-  );
-
-  // Every preset's own purse is one of these, so a preset always has a pill
-  // to light up; 0 and 10k are the two ends worth playing with.
-  buildSeg(
-    moneySeg,
-    MONEY_STEPS.map((v) => ({ v, label: shortBolts(v), title: `${comma(v)} bolts each to start` })),
-    (v) => {
-      setup.money = v;
-      setup.moneyTouched = true;
-      renderMoney();
-    },
-  );
-
-  buildSeg(
-    roundsSeg,
-    [
-      { v: 1, label: '1' },
-      { v: 3, label: '3' },
-      { v: 5, label: '5' },
-      { v: 10, label: '10' },
-      { v: 'custom', label: 'Custom' },
-    ],
-    (v) => {
-      setup.roundsTouched = true;
-      if (v === 'custom') {
-        setup.custom = true;
+  /** The setup's three pill rows, built again on a language switch. */
+  function buildSetupSegs() {
+    buildSeg(
+      presetSeg,
+      Object.keys(PRESETS).map((id) => ({ v: id, label: t(`preset.${id}`), title: t(`presetd.${id}`) })),
+      (id) => {
+        setup.preset = id;
+        // The preset's rounds and seat count are a suggestion, and only for
+        // somebody who has not already said otherwise.
+        if (!setup.roundsTouched) {
+          setup.rounds = resolveSettings(id).rounds;
+          setup.custom = false;
+        }
+        if (!setup.moneyTouched) setup.money = resolveSettings(id).startMoney;
+        if (!setup.seatsTouched) {
+          defaultSeats(id);
+          renderSeats();
+        }
+        renderPreset();
         renderRounds();
-        roundsInput.focus();
-        return;
-      }
-      setup.custom = false;
-      setup.rounds = v;
-      renderRounds();
-    },
-  );
+        renderMoney();
+      },
+    );
+
+    // Every preset's own purse is one of these, so a preset always has a pill
+    // to light up; 0 and 10k are the two ends worth playing with.
+    buildSeg(
+      moneySeg,
+      MONEY_STEPS.map((v) => ({ v, label: shortNum(v), title: t('moneyEach', comma(v)) })),
+      (v) => {
+        setup.money = v;
+        setup.moneyTouched = true;
+        renderMoney();
+      },
+    );
+
+    buildSeg(
+      roundsSeg,
+      [
+        { v: 1, label: '1' },
+        { v: 3, label: '3' },
+        { v: 5, label: '5' },
+        { v: 10, label: '10' },
+        { v: 'custom', label: t('roundsOther') },
+      ],
+      (v) => {
+        setup.roundsTouched = true;
+        if (v === 'custom') {
+          setup.custom = true;
+          renderRounds();
+          roundsInput.focus();
+          return;
+        }
+        setup.custom = false;
+        setup.rounds = v;
+        renderRounds();
+      },
+    );
+  }
+  buildSetupSegs();
 
   roundsInput.addEventListener('input', () => {
     const n = Math.max(1, Math.min(50, Math.round(Number(roundsInput.value) || 1)));
@@ -830,7 +859,7 @@ export function createUI(callbacks = {}) {
 
   function renderPreset() {
     markSeg(presetSeg, setup.preset);
-    setText(presetBlurb, (PRESETS[setup.preset] || PRESETS.default).blurb);
+    setText(presetBlurb, t(`presetd.${PRESETS[setup.preset] ? setup.preset : 'default'}`));
   }
 
   function renderMoney() {
@@ -874,8 +903,8 @@ export function createUI(callbacks = {}) {
 
     const sw = el('button', 'swatch-btn');
     sw.type = 'button';
-    sw.title = `${color.name} — tap for another colour`;
-    sw.setAttribute('aria-label', `Colour: ${color.name}. Tap for another.`);
+    sw.title = t('colourTitle', colourName(seat.colorIndex));
+    sw.setAttribute('aria-label', t('colourLabel', colourName(seat.colorIndex)));
     const portrait = el('canvas', 'mech-portrait');
     portrait.setAttribute('aria-hidden', 'true');
     sw.appendChild(portrait);
@@ -887,11 +916,12 @@ export function createUI(callbacks = {}) {
       const c = PALETTE[seat.colorIndex];
       card.style.setProperty('--c', c.hex);
       if (callbacks.paintPortrait) callbacks.paintPortrait(portrait, c.hex);
-      sw.title = `${c.name} — tap for another colour`;
-      sw.setAttribute('aria-label', `Colour: ${c.name}. Tap for another.`);
+      const cName = colourName(seat.colorIndex);
+      sw.title = t('colourTitle', cName);
+      sw.setAttribute('aria-label', t('colourLabel', cName));
       // A name nobody has typed follows its colour around.
       if (wasAuto && !seat.remote) {
-        seat.name = seat.isAI || i > 0 ? c.name : 'You';
+        seat.name = seat.isAI || i > 0 ? cName : t('you');
         nameField.value = seat.name;
       }
     });
@@ -909,7 +939,7 @@ export function createUI(callbacks = {}) {
     nameField.maxLength = 14;
     nameField.autocomplete = 'off';
     nameField.spellcheck = false;
-    nameField.setAttribute('aria-label', `Name for seat ${i + 1}`);
+    nameField.setAttribute('aria-label', t('seatName', i + 1));
     nameField.addEventListener('input', () => {
       seat.name = nameField.value;
       seat.autoName = false;
@@ -918,17 +948,17 @@ export function createUI(callbacks = {}) {
 
     if (seat.remote) {
       // Who drives it is not a choice: the friend does, from their device.
-      head.appendChild(el('span', 'tag online-tag', 'Online'));
+      head.appendChild(el('span', 'tag online-tag', t('online')));
       card.appendChild(head);
       return card;
     }
 
     const kind = el('div', 'seg seg-kind');
     kind.setAttribute('role', 'group');
-    kind.setAttribute('aria-label', `Who drives seat ${i + 1}`);
+    kind.setAttribute('aria-label', t('seatWho', i + 1));
     for (const opt of [
-      { v: 'human', label: 'You' },
-      { v: 'bot', label: 'Bot' },
+      { v: 'human', label: t('you') },
+      { v: 'bot', label: t('robot') },
     ]) {
       const b = el('button', null, opt.label);
       b.type = 'button';
@@ -943,7 +973,7 @@ export function createUI(callbacks = {}) {
         persBox.hidden = !seat.isAI;
         persBlurb.hidden = !seat.isAI;
         if (seat.autoName) {
-          seat.name = seat.isAI ? PALETTE[seat.colorIndex].name : 'You';
+          seat.name = seat.isAI ? colourName(seat.colorIndex) : t('you');
           nameField.value = seat.name;
         }
       });
@@ -956,14 +986,13 @@ export function createUI(callbacks = {}) {
     // same size however the row wraps on a narrow phone.
     const persBox = el('div', 'seg seg-grid seg-pers');
     persBox.setAttribute('role', 'group');
-    persBox.setAttribute('aria-label', `Bot style for seat ${i + 1}`);
+    persBox.setAttribute('aria-label', t('seatStyle', i + 1));
     const persBlurb = el('p', 'pers-blurb');
     for (const id of PERSONALITY_IDS) {
-      const P = PERSONALITIES[id];
-      const b = el('button', null, P.name);
+      const b = el('button', null, t(`bot.${id}`));
       b.type = 'button';
       b.dataset.v = id;
-      b.title = P.blurb;
+      b.title = t(`botd.${id}`);
       b.setAttribute('aria-pressed', String(seat.personality === id));
       b.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -971,11 +1000,11 @@ export function createUI(callbacks = {}) {
         for (const other of persBox.children) {
           other.setAttribute('aria-pressed', String(other.dataset.v === id));
         }
-        setText(persBlurb, PERSONALITIES[id].blurb);
+        setText(persBlurb, t(`botd.${id}`));
       });
       persBox.appendChild(b);
     }
-    setText(persBlurb, (PERSONALITIES[seat.personality] || PERSONALITIES.rookie).blurb);
+    setText(persBlurb, t(`botd.${PERSONALITIES[seat.personality] ? seat.personality : 'rookie'}`));
     persBox.hidden = !seat.isAI;
     persBlurb.hidden = !seat.isAI;
     card.appendChild(persBox);
@@ -1004,7 +1033,7 @@ export function createUI(callbacks = {}) {
     e.stopPropagation();
     saveSetup();
     const specs = setup.seats.map((s, i) => ({
-      name: (s.name || '').trim() || PALETTE[s.colorIndex].name,
+      name: (s.name || '').trim() || colourName(s.colorIndex),
       colorIndex: s.colorIndex,
       isAI: s.isAI,
       personality: s.personality,
@@ -1081,16 +1110,19 @@ export function createUI(callbacks = {}) {
     renderSeats();
   }
 
-  /** What a guest's lobby shows: the crew and the rules, from `forId`'s seat. */
+  /**
+   * What a guest's lobby shows: the crew and the rules, from `forId`'s seat.
+   * Numbers and keys, never a sentence — the guest's lobby says it in the
+   * guest's own language (js/net/lobby.js). The host's name is a name, or
+   * null for the guest to call "the host" in its own words.
+   */
   function roomSummary(forId) {
-    const rounds = setup.rounds === 1 ? '1 round' : `${setup.rounds} rounds`;
-    const preset = (PRESETS[setup.preset] || PRESETS.default).label;
     const host = setup.seats.find((s) => !s.isAI && !s.remote);
     return {
-      host: host ? (host.name || '').trim() || 'The host' : 'The host',
-      rules: `${preset} rules · ${rounds} · ${comma(setup.money)} bolts to start`,
+      host: host ? (host.name || '').trim() || null : null,
+      rules: { preset: setup.preset, rounds: setup.rounds, money: setup.money },
       seats: setup.seats.map((s) => ({
-        name: (s.name || '').trim() || PALETTE[s.colorIndex].name,
+        name: (s.name || '').trim() || colourName(s.colorIndex),
         colorIndex: s.colorIndex,
         kind: s.remote ? 'online' : s.isAI ? 'bot' : 'host',
         you: !!forId && s.remote === forId,
@@ -1185,10 +1217,10 @@ export function createUI(callbacks = {}) {
       const b = el('button', 'weapon');
       b.type = 'button';
       b.dataset.wid = w.id;
-      b.title = `${w.name} — ${w.desc}`;
+      b.title = `${wName(w.id)} — ${wDesc(w.id)}`;
       b.setAttribute('aria-pressed', String(player.weaponId === w.id));
       b.appendChild(iconImg(w.icon));
-      b.appendChild(el('span', 'w-name', w.name));
+      b.appendChild(el('span', 'w-name', wName(w.id)));
       const count = el('span', 'w-ammo', ammoText(match.ammo(player, w.id)));
       b.appendChild(count);
       b.disabled = controlsLocked;
@@ -1262,7 +1294,7 @@ export function createUI(callbacks = {}) {
       hpBar.classList.toggle('low', frac <= 0.25);
       hpBar.classList.toggle('mid', frac > 0.25 && frac <= 0.55);
       setText(hpText, hp);
-      hpWrap.setAttribute('aria-label', `Hull ${hp} of ${maxhp}`);
+      hpWrap.setAttribute('aria-label', t('hull', hp, maxhp));
     }
     if (shield !== seen.shield) {
       seen.shield = shield;
@@ -1276,7 +1308,7 @@ export function createUI(callbacks = {}) {
     if (match.round !== seen.round || match.settings.rounds !== seen.rounds) {
       seen.round = match.round;
       seen.rounds = match.settings.rounds;
-      setText(roundText, `Round ${match.round} / ${match.settings.rounds}`);
+      setText(roundText, t('roundOf', match.round, match.settings.rounds));
     }
 
     // ---- aim -------------------------------------------------------------
@@ -1292,12 +1324,12 @@ export function createUI(callbacks = {}) {
       moveMode = moving;
       seen.angle = -1;
       seen.walk = NaN;
-      setText(angleLabel, moving ? 'Walk' : 'Angle');
+      setText(angleLabel, t(moving ? 'walk' : 'angle'));
       setText(angleUnit, moving ? '' : '°');
-      setText(fireBtn, moving ? 'Walk' : 'Fire');
+      setText(fireBtn, t(moving ? 'walk' : 'fire'));
       const [left, right] = hudBottom.querySelectorAll('.pill.step[data-axis="angle"]');
-      if (left) left.setAttribute('aria-label', moving ? 'Walk target left' : 'Swing barrel left');
-      if (right) right.setAttribute('aria-label', moving ? 'Walk target right' : 'Swing barrel right');
+      if (left) left.setAttribute('aria-label', t(moving ? 'walkLeft' : 'swingLeft'));
+      if (right) right.setAttribute('aria-label', t(moving ? 'walkRight' : 'swingRight'));
       powerDial.classList.toggle('off', moving);
       applyLock();
     }
@@ -1333,14 +1365,11 @@ export function createUI(callbacks = {}) {
       const strength = Math.min(1, mag / max);
       windEl.classList.toggle('west', wind < 0);
       windEl.classList.toggle('calm', mag === 0);
-      setText(windNum, mag === 0 ? 'calm' : String(mag));
+      setText(windNum, mag === 0 ? t('calm') : String(mag));
       setText(windHead, wind < 0 ? '◀' : '▶');
       windBar.style.width = `${6 + strength * 26}px`;
       windBar.style.opacity = String(0.35 + strength * 0.65);
-      windEl.setAttribute(
-        'aria-label',
-        mag === 0 ? 'Wind calm' : `Wind ${mag} to the ${wind < 0 ? 'left' : 'right'}`,
-      );
+      windEl.setAttribute('aria-label', mag === 0 ? t('windCalm') : t('wind', mag, wind < 0));
     }
 
     // ---- shot timer ------------------------------------------------------
@@ -1409,10 +1438,21 @@ export function createUI(callbacks = {}) {
     return s;
   }
 
+  let sbMatch = null;
+  let waiting = { names: null, tapped: false };
+
   function showScoreboard(match) {
-    setText(sbTitle, `Round ${match.round} results`);
+    waiting = { names: null, tapped: false };
     sbWait.hidden = true;
     sbContinue.disabled = false;
+    fillScoreboard(match);
+    show('scoreboard');
+  }
+
+  /** The table itself, without moving screens: also a language switch's repaint. */
+  function fillScoreboard(match) {
+    sbMatch = match;
+    setText(sbTitle, t('sb.title', match.round));
     sbRows.textContent = '';
     // Best round first: the scoreboard is the one moment the table is not in
     // seat order, because what everyone wants to know is who just had a good
@@ -1430,16 +1470,16 @@ export function createUI(callbacks = {}) {
       who.appendChild(swatchFor(player));
       who.appendChild(el('b', null, player.name));
       who.appendChild(
-        el('span', award.alive ? 'tag standing' : 'tag wrecked', award.alive ? 'standing' : 'wrecked'),
+        el('span', award.alive ? 'tag standing' : 'tag wrecked', t(award.alive ? 'standing' : 'wrecked')),
       );
-      if (award.won) who.appendChild(el('span', 'tag won', 'took the round'));
+      if (award.won) who.appendChild(el('span', 'tag won', t('tookRound')));
       row.appendChild(who);
 
       const stats = el('div', 'sb-stats');
-      stats.appendChild(statCell('damage', Math.round(player.round.damage)));
-      stats.appendChild(statCell('wrecks', player.round.kills));
-      stats.appendChild(statCell('wins', player.roundWins));
-      stats.appendChild(statCell('score', comma(player.score)));
+      stats.appendChild(statCell(t('stat.damage'), Math.round(player.round.damage)));
+      stats.appendChild(statCell(t('stat.wrecks'), player.round.kills));
+      stats.appendChild(statCell(t('stat.wins'), player.roundWins));
+      stats.appendChild(statCell(t('stat.score'), comma(player.score)));
       row.appendChild(stats);
 
       const money = el('div', 'sb-money');
@@ -1448,16 +1488,17 @@ export function createUI(callbacks = {}) {
       earned.appendChild(boltAmount(award.bolts, ''));
       money.appendChild(earned);
       const chips = el('div', 'chips');
+      // The sim names each reason with a key ('damage', 'round win'); the
+      // words are ours.
       for (const [label, amount] of award.reasons) {
-        chips.appendChild(el('span', 'chip', `${label} ${comma(amount)}`));
+        chips.appendChild(el('span', 'chip', `${t(`reason.${label}`)} ${comma(amount)}`));
       }
       money.appendChild(chips);
-      money.appendChild(boltAmount(player.money, 'in the tin'));
+      money.appendChild(boltAmount(player.money, t('inTheTin')));
       row.appendChild(money);
 
       sbRows.appendChild(row);
     }
-    show('scoreboard');
   }
 
   sbContinue.addEventListener('click', (e) => {
@@ -1474,9 +1515,13 @@ export function createUI(callbacks = {}) {
   let shopIsBot = false;
 
   /** `watch`: somebody else's turn at the counter, on their own screen. */
+  /** The last call that filled the shop, so a language switch can make it again. */
+  let shopAgain = null;
+
   function showShop(match, { watch = false } = {}) {
     const p = match.shopper();
     if (!p) return;
+    shopAgain = () => showShop(match, { watch });
     shopIsBot = !!p.isAI || watch;
     shopSwatch.style.background = p.color.hex;
     screens.shop.style.setProperty('--c', p.color.hex);
@@ -1484,7 +1529,7 @@ export function createUI(callbacks = {}) {
     // Dead players still shop — next round they walk again — and the header
     // says so rather than leaving somebody wondering why a wreck is buying.
     shopStatus.hidden = p.alive;
-    if (!p.alive) setText(shopStatus, 'wrecked, still shopping');
+    if (!p.alive) setText(shopStatus, t('shopWrecked'));
 
     shopRowsBox.textContent = '';
     shopRefs = [];
@@ -1494,18 +1539,18 @@ export function createUI(callbacks = {}) {
       r.appendChild(iconImg(item.icon));
 
       const main = el('div', 'sr-main');
-      main.appendChild(el('b', 'sr-name', item.name));
-      main.appendChild(el('span', 'sr-desc', item.desc));
+      main.appendChild(el('b', 'sr-name', wName(item.id)));
+      main.appendChild(el('span', 'sr-desc', wDesc(item.id)));
       r.appendChild(main);
 
       const buyBox = el('div', 'sr-buy');
       buyBox.appendChild(boltAmount(item.price, ''));
       buyBox.appendChild(
-        el('span', 'sr-pack', item.pack === 1 ? '1 round' : `×${item.pack} rounds`),
+        el('span', 'sr-pack', t('pack', item.pack)),
       );
-      const owned = el('span', 'sr-owned', row.owned ? `holding ${row.owned}` : '');
+      const owned = el('span', 'sr-owned', row.owned ? t('holding', row.owned) : '');
       buyBox.appendChild(owned);
-      const buy = el('button', 'buy', 'Buy');
+      const buy = el('button', 'buy', t('buy'));
       buy.type = 'button';
       buy.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1520,7 +1565,7 @@ export function createUI(callbacks = {}) {
 
     // A bot's turn at the counter is something to watch, not to press.
     shopBotLine.hidden = !shopIsBot;
-    if (shopIsBot) setText(shopBotLine, watch ? `${p.name} is at the counter on their own screen…` : `${p.name} is looking at the shelves…`);
+    if (shopIsBot) setText(shopBotLine, t(watch ? 'shopWatch' : 'shopLooking', p.name));
     shopDone.hidden = shopIsBot;
 
     updateShop(match);
@@ -1531,10 +1576,10 @@ export function createUI(callbacks = {}) {
     const p = match.shopper();
     if (!p) return;
     shopMoney.textContent = '';
-    shopMoney.appendChild(boltAmount(p.money, 'bolts'));
+    shopMoney.appendChild(boltAmount(p.money, t('bolts')));
     for (const ref of shopRefs) {
       const owned = p.inventory[ref.id] || 0;
-      setText(ref.owned, owned ? `holding ${owned}` : '');
+      setText(ref.owned, owned ? t('holding', owned) : '');
       const canBuy = !shopIsBot && p.money >= ref.price;
       ref.buy.disabled = !canBuy;
       ref.buy.setAttribute('aria-disabled', String(!canBuy));
@@ -1553,7 +1598,8 @@ export function createUI(callbacks = {}) {
     const p = match.shopper();
     if (!p) return;
     showShop(match);
-    const names = new Map(match.shopRows(p).map((r) => [r.item.id, r.item.name]));
+    shopAgain = () => showBotShopping(match, purchases);
+    const names = new Map(match.shopRows(p).map((r) => [r.item.id, wName(r.item.id)]));
     const counts = new Map();
     for (const id of purchases || []) {
       const name = names.get(id) || id;
@@ -1563,7 +1609,7 @@ export function createUI(callbacks = {}) {
     shopBotLine.hidden = false;
     setText(
       shopBotLine,
-      parts.length ? `${p.name} bought ${parts.join(', ')}` : `${p.name} bought nothing`,
+      parts.length ? t('bought', p.name, parts) : t('boughtNothing', p.name),
     );
     updateShop(match);
   }
@@ -1577,12 +1623,15 @@ export function createUI(callbacks = {}) {
   // Match over
   // =========================================================================
 
+  let moMatch = null;
+
   function showMatchOver(match) {
+    moMatch = match;
     const standings = match.standings || [];
-    setText(moTitle, 'Match over');
+    setText(moTitle, t('mo.title'));
     moRows.textContent = '';
     const champ = standings[0] ? match.player(standings[0].playerId) : null;
-    setText(moChamp, champ ? `${champ.name} walks away with it.` : 'Nobody walks away.');
+    setText(moChamp, champ ? t('champ', champ.name) : t('noChamp'));
     if (champ) screens.matchover.style.setProperty('--c', champ.color.hex);
 
     for (const s of standings) {
@@ -1595,10 +1644,10 @@ export function createUI(callbacks = {}) {
       row.appendChild(swatchFor(player));
       row.appendChild(el('b', 'mo-name', s.name));
       const stats = el('div', 'mo-stats');
-      stats.appendChild(statCell('score', comma(s.score)));
-      stats.appendChild(statCell('rounds', s.roundWins));
-      stats.appendChild(statCell('wrecks', s.kills));
-      stats.appendChild(statCell('bolts', comma(s.money)));
+      stats.appendChild(statCell(t('stat.score'), comma(s.score)));
+      stats.appendChild(statCell(t('stat.rounds'), s.roundWins));
+      stats.appendChild(statCell(t('stat.wrecks'), s.kills));
+      stats.appendChild(statCell(t('stat.bolts'), comma(s.money)));
       row.appendChild(stats);
       moRows.appendChild(row);
     }
@@ -1641,11 +1690,17 @@ export function createUI(callbacks = {}) {
   let calloutTimer = 0;
   let calloutHide = 0;
 
+  /** What the callout is saying, kept as makers for a language switch. */
+  let calloutSays = { title: '', sub: '' };
+  const said = (x) => (typeof x === 'function' ? x() : x || '');
+
+  /** `title` and `sub` may be strings or functions that make them (t() calls). */
   function banner(title, sub, ms = 1700) {
     clearTimeout(calloutTimer);
     clearTimeout(calloutHide);
-    setText(calloutTitle, title || '');
-    setText(calloutSub, sub || '');
+    calloutSays = { title, sub };
+    setText(calloutTitle, said(title));
+    setText(calloutSub, said(sub));
     calloutSub.hidden = !sub;
     callout.hidden = false;
     // A frame between un-hiding and the class, or the transition never runs.
@@ -1664,7 +1719,7 @@ export function createUI(callbacks = {}) {
 
   function setExit(verb, onExit) {
     for (const btn of document.querySelectorAll('.exit-btn')) {
-      setText(btn, verb || 'Back to the arcade');
+      setText(btn, verb || t('exit.arcade'));
       btn.hidden = false;
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -1674,10 +1729,89 @@ export function createUI(callbacks = {}) {
   }
 
   // =========================================================================
+  // Pause, online or not
+  // =========================================================================
+
+  let pauseRole = null;
+
+  /**
+   * The pause panel, online: 'host' or 'guest', or null for hot-seat. A
+   * hill shared with other screens cannot be stopped from this one, so the
+   * panel says so and nothing on it pretends otherwise (hub §2) — and the
+   * bot speed, which is the host's, is not offered to a guest. The words are
+   * the hub's plain ones: Pause and Resume when it pauses, Menu and Back when
+   * it cannot.
+   */
+  function setOnline(role) {
+    pauseRole = role || null;
+    const online = !!role;
+    setText(pauseKicker, t(online ? 'pause.kickerOnline' : 'pause.kicker'));
+    setText(pauseTitle, t(online ? 'pause.titleOnline' : 'pause.title'));
+    pauseNote.hidden = !online;
+    setText(pauseNote, role === 'host' ? t('pause.noteHost') : role === 'guest' ? t('pause.noteGuest') : '');
+    botSpeedRow.hidden = role === 'guest';
+    setText(resumeBtn, t(online ? 'back' : 'resume'));
+    setText(quitBtn, t(role === 'host' ? 'quitHost' : role === 'guest' ? 'quitGuest' : 'quit'));
+  }
+
+  // =========================================================================
+  // Language
+  // =========================================================================
+
+  /*
+   * Two copies of the row, one on the setup screen and one in the pause
+   * panel; both are wired here and both show the same choice. A tap repaints
+   * in place (js/i18n.js dispatches arcade:lang, answered below) and changes
+   * no screen: the pause panel stays open and the round stays paused.
+   */
+  const langButtons = document.querySelectorAll('.seg-lang [data-lang]');
+  function markLang() {
+    const lang = getLang();
+    for (const b of langButtons) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+  }
+  for (const b of langButtons) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (b.dataset.lang !== getLang()) setLang(b.dataset.lang);
+    });
+  }
+  markLang();
+
+  document.addEventListener('arcade:lang', () => {
+    markLang();
+    // Setup: the pills, and the seat cards with any name the game chose.
+    buildSetupSegs();
+    renderPreset();
+    renderRounds();
+    renderMoney();
+    localiseNames();
+    renderSeats();
+    // The HUD: forget what was written and diff it all again now, rather
+    // than on the next stepped frame, which a paused round does not have.
+    if (seenMatch) {
+      resetSeen();
+      seen.locked = null;
+      if (onHud) updateHud(seenMatch);
+    }
+    // Whichever panel is up, filled again where it stands.
+    if (!screens.scoreboard.hidden && sbMatch) {
+      fillScoreboard(sbMatch);
+      if (waiting.names) api.setWaiting(waiting.names, waiting.tapped);
+    }
+    if (!screens.shop.hidden && shopAgain) shopAgain();
+    if (!screens.matchover.hidden && moMatch) showMatchOver(moMatch);
+    setOnline(pauseRole);
+    if (!callout.hidden) {
+      setText(calloutTitle, said(calloutSays.title));
+      setText(calloutSub, said(calloutSays.sub));
+    }
+  });
+
+  // =========================================================================
   // The API main.js holds
   // =========================================================================
 
-  return {
+  const api = {
     showSetup(lastSpecs, lastPreset, lastRounds) {
       if (Array.isArray(lastSpecs) && lastSpecs.length >= MIN_PLAYERS) {
         adoptSpecs(lastSpecs, lastPreset, lastRounds);
@@ -1739,15 +1873,16 @@ export function createUI(callbacks = {}) {
         return;
       }
       hangarCode.textContent = '';
-      for (const w of info.words) hangarCode.appendChild(el('span', 'code-word', w.toUpperCase()));
-      hangarCode.setAttribute('aria-label', info.words.join(' '));
+      // The code's words in this device's language; the wire keeps its own.
+      for (const w of info.words) hangarCode.appendChild(el('span', 'code-word', codeWord(w).toLocaleUpperCase()));
+      hangarCode.setAttribute('aria-label', info.words.map(codeWord).join(' '));
       setText(hangarStatus, info.status || '');
       hangarStatus.className = info.tone ? `blurb ${info.tone}` : 'blurb';
     },
     /** The host's callsign goes on the first seat that is still "You". */
     setHostName(name) {
       const seat = setup.seats.find((s) => !s.isAI && !s.remote);
-      if (seat && (seat.autoName || seat.name === 'You')) {
+      if (seat && (seat.autoName || variants('you').includes(seat.name))) {
         seat.name = name;
         seat.autoName = false;
         renderSeats();
@@ -1759,7 +1894,8 @@ export function createUI(callbacks = {}) {
 
     /** Online results: who the table is waiting on, and whether we tapped. */
     setWaiting(names, tapped) {
-      const text = names && names.length ? `Waiting for ${names.join(', ')}` : '';
+      waiting = { names, tapped };
+      const text = names && names.length ? t('waitingFor', names) : '';
       sbWait.hidden = !text;
       setText(sbWait, text);
       sbContinue.disabled = !!tapped;
@@ -1771,23 +1907,7 @@ export function createUI(callbacks = {}) {
      * panel says so and nothing on it pretends otherwise (hub §2) — and the
      * bot speed, which is the host's, is not offered to a guest.
      */
-    setOnline(role) {
-      const online = !!role;
-      setText(pauseKicker, online ? 'Online — the hill keeps going' : 'Nothing moves until you say so');
-      setText(pauseTitle, online ? 'Still in the fight' : 'Paused');
-      pauseNote.hidden = !online;
-      setText(
-        pauseNote,
-        role === 'host'
-          ? 'Everyone else is still playing. Bot speed here is for the whole match.'
-          : role === 'guest'
-            ? 'Everyone else is still playing, and your controls still work.'
-            : '',
-      );
-      botSpeedRow.hidden = role === 'guest';
-      setText(resumeBtn, online ? 'Back to the hill' : 'Resume');
-      setText(quitBtn, role === 'host' ? 'End match for everyone' : role === 'guest' ? 'Leave match' : 'Power down');
-    },
+    setOnline,
     updateHud,
     lockControls,
 
@@ -1836,4 +1956,6 @@ export function createUI(callbacks = {}) {
       setText(volumeOut, pct);
     },
   };
+  setOnline(null);
+  return api;
 }

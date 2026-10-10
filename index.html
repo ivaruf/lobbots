@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="nb">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -7,6 +7,21 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>Lobbots</title>
+    <!--
+      The language, before anything is painted. js/i18n.js owns it, but it is
+      a module and runs after the page has been parsed; this reads the same
+      hub-wide key first so <html lang> is right from the first frame. The
+      static text below is written in Norwegian, the default, and i18n.js
+      repaints it for a player who chose English.
+    -->
+    <script>
+      try {
+        if (localStorage.getItem("arcade.lang.v1") === "en")
+          document.documentElement.lang = "en";
+      } catch (e) {
+        /* No storage: Norwegian, the default. */
+      }
+    </script>
     <meta
       name="description"
       content="Turn-based mech artillery. Industrial walkers planted on a hillside take turns picking a weapon, an angle and a power; the wind bends the shot, the craters change the ground, and the last one standing takes the round."
@@ -58,7 +73,7 @@
       every screen below floats over it as DOM. The panels are deliberately
       translucent so the hillside shows through whatever you are reading.
     -->
-    <canvas id="field" aria-label="Lobbots battlefield"></canvas>
+    <canvas id="field" data-i18n-aria="field" aria-label="Slagmarken i Lobbots"></canvas>
 
     <div id="ui">
       <!-- ============================ SETUP ============================
@@ -72,19 +87,19 @@
         <div class="plate-strip" aria-hidden="true"></div>
 
         <header class="screen-head">
-          <p class="kicker hangar-kicker"><i></i> Precision robotics</p>
+          <p class="kicker hangar-kicker"><i></i> <span data-i18n="setup.kicker">Presisjonsrobotikk</span></p>
           <h1 id="logo">Lob<span>bots</span></h1>
-          <p class="tagline">Big robots, bigger lobs.</p>
+          <p class="tagline" data-i18n="setup.tagline">Store roboter, enda større skudd.</p>
           <div class="hangar-art" aria-hidden="true">
             <span class="hangar-index">LB / 01</span>
             <canvas id="hero-mech"></canvas>
-            <span class="hangar-caption">LB-01 / Artillery platform <b>● Systems online</b></span>
+            <span class="hangar-caption"><span data-i18n="art.caption">LB-01 / Artilleriplattform</span> <b data-i18n="art.online">● Systemer klare</b></span>
           </div>
         </header>
 
         <div class="setup-opts">
           <div class="row">
-            <span class="label" id="lbl-preset">Rules</span>
+            <span class="label" id="lbl-preset" data-i18n="rules">Regler</span>
             <div
               class="seg"
               data-seg="preset"
@@ -95,7 +110,7 @@
           <p class="blurb" id="preset-blurb"></p>
 
           <div class="row">
-            <span class="label" id="lbl-rounds">Rounds</span>
+            <span class="label" id="lbl-rounds" data-i18n="rounds">Runder</span>
             <div
               class="seg"
               data-seg="rounds"
@@ -104,7 +119,7 @@
             ></div>
           </div>
           <div class="row" id="rounds-custom" hidden>
-            <label class="label" for="rounds-input">How many</label>
+            <label class="label" for="rounds-input" data-i18n="howMany">Hvor mange</label>
             <input
               id="rounds-input"
               class="field num"
@@ -121,7 +136,7 @@
                above nothing opens the parts counter before the first hill,
                so a rich start is a first round with real weapons in it. -->
           <div class="row">
-            <span class="label" id="lbl-money">Start bolts</span>
+            <span class="label" id="lbl-money" data-i18n="money">Start&shy;bolter</span>
             <div
               class="seg"
               data-seg="money"
@@ -131,19 +146,57 @@
           </div>
         </div>
 
+        <!-- THE LANGUAGE, before a run begins (hub §2, "Two languages"): the
+             player who needs it most is the stranger who cannot read the
+             Norwegian the game opened in. A child of #setup rather than of
+             .setup-opts so the sideways-phone grid can lift it into the
+             roster column, where there is height to spare. The same row sits
+             in the pause panel; each copy has its own clipPath ids, because
+             ids are page-global and the second Union Jack would otherwise
+             clip against the first. js/ui.js wires both. -->
+        <div class="row lang-row">
+          <span class="label" id="lbl-lang" data-i18n="language">Språk</span>
+          <div class="seg seg-lang" role="group" aria-labelledby="lbl-lang">
+            <button type="button" data-lang="nb" lang="nb" aria-pressed="false">
+              <svg class="flag" viewBox="0 0 22 16" aria-hidden="true">
+                <rect width="22" height="16" fill="#ba0c2f"/>
+                <path d="M6 0h4v16H6zM0 6h22v4H0z" fill="#fff"/>
+                <path d="M7 0h2v16H7zM0 7h22v2H0z" fill="#00205b"/>
+              </svg>
+              <span>Norsk</span>
+            </button>
+            <button type="button" data-lang="en" lang="en" aria-pressed="false">
+              <svg class="flag" viewBox="0 0 60 30" aria-hidden="true">
+                <clipPath id="uk-clip-setup"><path d="M0 0v30h60V0z"/></clipPath>
+                <clipPath id="uk-diag-setup"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath>
+                <g clip-path="url(#uk-clip-setup)">
+                  <path d="M0 0v30h60V0z" fill="#012169"/>
+                  <path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/>
+                  <path d="M0 0l60 30m0-30L0 30" clip-path="url(#uk-diag-setup)" stroke="#c8102e" stroke-width="4"/>
+                  <path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/>
+                  <path d="M30 0v30M0 15h60" stroke="#c8102e" stroke-width="6"/>
+                </g>
+              </svg>
+              <span>English</span>
+            </button>
+          </div>
+        </div>
+
         <!-- The roster. #seats scrolls inside its own box rather than growing
              the panel, so DEPLOY and the way out never leave the screen —
              ten seats is a lot of card on a phone. -->
         <div id="roster">
           <div class="roster-head">
-            <span class="label" id="lbl-seats">Your crew</span>
+            <span class="label" id="lbl-seats" data-i18n="players">Spillere</span>
             <span id="seat-count" class="count">4</span>
             <div class="seat-tools" role="group" aria-labelledby="lbl-seats">
               <button
                 type="button"
                 id="seat-less"
                 class="pill"
-                aria-label="One lobbot fewer"
+                data-i18n-label="seatLess"
+                aria-label="Én spiller færre"
+                title="Én spiller færre"
               >
                 −
               </button>
@@ -151,7 +204,9 @@
                 type="button"
                 id="seat-more"
                 class="pill"
-                aria-label="One lobbot more"
+                data-i18n-label="seatMore"
+                aria-label="Én spiller til"
+                title="Én spiller til"
               >
                 +
               </button>
@@ -163,16 +218,16 @@
                Friends who join appear as seat cards below it. -->
           <div id="hangar" hidden>
             <div class="hangar-line">
-              <span class="label">Hangar code</span>
+              <span class="label" data-i18n="code">Kode</span>
               <span id="hangar-code" class="code-words" aria-live="polite"></span>
-              <button type="button" id="hangar-close" class="ghost small">Close</button>
+              <button type="button" id="hangar-close" class="ghost small" data-i18n="close">Lukk</button>
             </div>
             <p id="hangar-status" class="blurb" aria-live="polite"></p>
           </div>
           <div id="seats"></div>
         </div>
 
-        <button type="button" id="deploy" class="primary">Deploy crew <span aria-hidden="true">↗</span></button>
+        <button type="button" id="deploy" class="primary"><span data-i18n="play">Spill</span> <span class="go-arrow" aria-hidden="true">↗</span></button>
 
         <div class="screen-foot">
           <!--
@@ -183,14 +238,14 @@
             round. Owned end to end by js/update.js, which nothing imports.
           -->
           <button type="button" id="update" hidden>
-            <span class="update-title">New build ready</span>
-            <span class="update-sub">Tap to take it</span>
+            <span class="update-title">Ny versjon klar</span>
+            <span class="update-sub">Trykk for å hente den</span>
           </button>
           <div class="menu-tools">
             <!-- The way into online play (js/net/lobby.js). -->
-            <button type="button" id="online-btn" class="ghost">Play online</button>
+            <button type="button" id="online-btn" class="ghost" data-i18n="playOnline">Spill på nett</button>
             <button type="button" id="exit-btn" class="ghost exit-btn" hidden>
-              Back to the arcade
+              Tilbake til arkaden
             </button>
           </div>
           <!-- Which build is actually serving this session, asked of the
@@ -211,13 +266,13 @@
       <section id="lobby" class="screen panel" hidden aria-labelledby="lobby-title">
         <div class="plate-strip" aria-hidden="true"></div>
         <header class="screen-head">
-          <p class="kicker" id="lobby-kicker">Play online</p>
-          <h2 id="lobby-title">Crew up</h2>
+          <p class="kicker" id="lobby-kicker">Med venner</p>
+          <h2 id="lobby-title">Spill på nett</h2>
         </header>
 
         <div id="lobby-choose" class="lobby-view">
           <div class="row">
-            <label class="label" for="callsign">Callsign</label>
+            <label class="label" for="callsign" data-i18n="name">Navn</label>
             <input
               id="callsign"
               class="field"
@@ -225,26 +280,27 @@
               maxlength="14"
               autocomplete="off"
               spellcheck="false"
-              placeholder="What they call you"
+              data-i18n-placeholder="namePlaceholder"
+              placeholder="Hva heter du?"
             />
           </div>
           <div class="lobby-doors">
-            <button type="button" id="lobby-host" class="primary">Open a hangar</button>
-            <button type="button" id="lobby-join" class="primary">Join a hangar</button>
+            <button type="button" id="lobby-host" class="primary" data-i18n="host">Lag et spill</button>
+            <button type="button" id="lobby-join" class="primary" data-i18n="join">Bli med</button>
           </div>
-          <p class="blurb lobby-fine">
-            Your friend's device talks straight to yours. A public matchmaker
-            introduces the two and sees the three words, never the game.
+          <p class="blurb lobby-fine" data-i18n="lobby.fine">
+            Enheten til vennen din snakker rett med din. En åpen møteplass på
+            nettet kobler dere sammen og ser de tre ordene, aldri selve spillet.
           </p>
         </div>
 
         <div id="lobby-pad" class="lobby-view" hidden>
-          <p class="blurb">Tap the three words your friend reads out.</p>
+          <p class="blurb" data-i18n="pad.hint">Trykk på de tre ordene vennen din leser opp.</p>
           <div id="pad-slots" class="code-words hero" aria-live="polite"></div>
-          <div id="pad-keys" class="pad" role="group" aria-label="Code words"></div>
+          <div id="pad-keys" class="pad" role="group" data-i18n-aria="pad.keys" aria-label="Kodeord"></div>
           <div class="lobby-doors">
-            <button type="button" id="pad-clear" class="ghost">Clear</button>
-            <button type="button" id="pad-go" class="primary" disabled>Join</button>
+            <button type="button" id="pad-clear" class="ghost" data-i18n="pad.clear">Tøm</button>
+            <button type="button" id="pad-go" class="primary" disabled data-i18n="join">Bli med</button>
           </div>
         </div>
 
@@ -256,7 +312,7 @@
 
         <p id="lobby-status" class="blurb" aria-live="polite"></p>
         <div class="menu-tools">
-          <button type="button" id="lobby-back" class="ghost">Back</button>
+          <button type="button" id="lobby-back" class="ghost">Tilbake</button>
         </div>
       </section>
 
@@ -270,10 +326,10 @@
           <div id="turn-chip">
             <i class="swatch" id="turn-swatch" aria-hidden="true"></i>
             <span id="turn-name">—</span>
-            <span id="turn-think" hidden>thinking…</span>
+            <span id="turn-think" hidden data-i18n="thinking">tenker …</span>
           </div>
 
-          <div id="hp" role="img" aria-label="Hull">
+          <div id="hp" role="img" aria-label="Skrog">
             <div id="hp-bar">
               <i id="hp-fill"></i>
               <i id="hp-shield" hidden></i>
@@ -281,12 +337,12 @@
             <span id="hp-text">100</span>
           </div>
 
-          <div id="round-text">Round 1 / 5</div>
+          <div id="round-text">Runde 1 / 5</div>
 
           <!-- The wind: an arrow that points where it blows, as long and as
                bright as it is strong, with the number the sim actually uses. -->
-          <div id="wind" role="img" aria-label="Wind calm">
-            <span id="wind-num">calm</span>
+          <div id="wind" role="img" aria-label="Vindstille">
+            <span id="wind-num">stille</span>
             <span id="wind-arrow" aria-hidden="true">
               <i id="wind-bar"></i>
               <b id="wind-head">▶</b>
@@ -297,7 +353,7 @@
 
           <!-- Only once no human walker is left standing this round: play the
                bots' fight out at once and go to the results. -->
-          <button type="button" id="skip-btn" hidden>Skip to results ▸▸</button>
+          <button type="button" id="skip-btn" hidden data-i18n="skip">Hopp til resultatene ▸▸</button>
         </div>
 
         <div id="hud-bottom">
@@ -308,20 +364,20 @@
                 class="pill step"
                 data-axis="angle"
                 data-dir="1"
-                aria-label="Swing barrel left"
+                aria-label="Sving løpet mot venstre"
               >
                 ◂
               </button>
               <span class="dial-read">
                 <b id="angle-val">45</b><span class="dial-unit" id="angle-unit">°</span>
-                <span class="dial-label" id="angle-label">Angle</span>
+                <span class="dial-label" id="angle-label">Vinkel</span>
               </span>
               <button
                 type="button"
                 class="pill step"
                 data-axis="angle"
                 data-dir="-1"
-                aria-label="Swing barrel right"
+                aria-label="Sving løpet mot høyre"
               >
                 ▸
               </button>
@@ -333,20 +389,22 @@
                 class="pill step"
                 data-axis="power"
                 data-dir="-1"
-                aria-label="Less power"
+                data-i18n-aria="lessPower"
+                aria-label="Mindre kraft"
               >
                 −
               </button>
               <span class="dial-read">
                 <b id="power-val">60</b>
-                <span class="dial-label">Power</span>
+                <span class="dial-label" data-i18n="power">Kraft</span>
               </span>
               <button
                 type="button"
                 class="pill step"
                 data-axis="power"
                 data-dir="1"
-                aria-label="More power"
+                data-i18n-aria="morePower"
+                aria-label="Mer kraft"
               >
                 +
               </button>
@@ -355,9 +413,9 @@
 
           <!-- One button per weapon in the current player's arsenal, built by
                js/ui.js with a procedurally drawn icon. -->
-          <div id="weapons" role="group" aria-label="Loadout"></div>
+          <div id="weapons" role="group" data-i18n-aria="loadout" aria-label="Våpen"></div>
 
-          <button type="button" id="fire-btn">Fire</button>
+          <button type="button" id="fire-btn">Skyt</button>
         </div>
       </section>
 
@@ -370,20 +428,20 @@
       >
         <div class="plate-strip" aria-hidden="true"></div>
         <header class="screen-head">
-          <p class="kicker">What that cost everyone</p>
-          <h2 id="sb-title">Round results</h2>
+          <p class="kicker" data-i18n="sb.kicker">Dette kostet det</p>
+          <h2 id="sb-title">Resultater</h2>
         </header>
         <div id="sb-rows" class="rows"></div>
         <!-- Online, the table waits for everyone; this says for whom. -->
         <p id="sb-wait" class="blurb" hidden aria-live="polite"></p>
-        <button type="button" id="sb-continue" class="primary">Continue</button>
+        <button type="button" id="sb-continue" class="primary" data-i18n="continue">Fortsett</button>
       </section>
 
       <!-- ============================ SHOP ============================ -->
       <section id="shop" class="screen panel" hidden aria-labelledby="shop-title">
         <div class="plate-strip" aria-hidden="true"></div>
         <header class="screen-head shop-head">
-          <p class="kicker">The parts counter</p>
+          <p class="kicker" data-i18n="shop">Butikk</p>
           <h2 id="shop-title">
             <i class="swatch" id="shop-swatch" aria-hidden="true"></i>
             <span id="shop-name">—</span>
@@ -393,7 +451,7 @@
         </header>
         <div id="shop-rows" class="rows"></div>
         <p id="shop-bot" class="bot-line" hidden></p>
-        <button type="button" id="shop-done" class="primary">Done</button>
+        <button type="button" id="shop-done" class="primary" data-i18n="done">Ferdig</button>
       </section>
 
       <!-- =========================== PAUSE ============================ -->
@@ -406,8 +464,8 @@
       >
         <div class="plate-strip" aria-hidden="true"></div>
         <header class="screen-head">
-          <p class="kicker" id="pause-kicker">Nothing moves until you say so</p>
-          <h2 id="pause-title">Paused</h2>
+          <p class="kicker" id="pause-kicker">Ingenting skjer før du sier fra</p>
+          <h2 id="pause-title">Pause</h2>
           <!-- Online, nothing here pauses: the hill belongs to everyone.
                js/ui.js says so here and renames the buttons to match. -->
           <p id="pause-note" class="blurb" hidden></p>
@@ -415,7 +473,7 @@
 
         <div class="pause-opts">
           <div class="row">
-            <label class="label" for="volume">Volume</label>
+            <label class="label" for="volume" data-i18n="sound">Lyd</label>
             <div class="slider">
               <input
                 type="range"
@@ -432,7 +490,7 @@
                their turns and for the rest of a round you are out of. Your
                own shot always flies at ×1. js/main.js keeps the number. -->
           <div class="row" id="bot-speed-row">
-            <label class="label" for="bot-speed">Bot speed</label>
+            <label class="label" for="bot-speed" data-i18n="botSpeed">Robot&shy;fart</label>
             <div class="slider">
               <input
                 type="range"
@@ -445,18 +503,47 @@
               <output id="bot-speed-out" for="bot-speed">×1</output>
             </div>
           </div>
+          <!-- The language, mid-match: switching repaints in place and
+               neither unpauses nor restarts anything (hub §2). -->
+          <div class="row lang-row">
+            <span class="label" id="lbl-lang-pause" data-i18n="language">Språk</span>
+            <div class="seg seg-lang" role="group" aria-labelledby="lbl-lang-pause">
+              <button type="button" data-lang="nb" lang="nb" aria-pressed="false">
+                <svg class="flag" viewBox="0 0 22 16" aria-hidden="true">
+                  <rect width="22" height="16" fill="#ba0c2f"/>
+                  <path d="M6 0h4v16H6zM0 6h22v4H0z" fill="#fff"/>
+                  <path d="M7 0h2v16H7zM0 7h22v2H0z" fill="#00205b"/>
+                </svg>
+                <span>Norsk</span>
+              </button>
+              <button type="button" data-lang="en" lang="en" aria-pressed="false">
+                <svg class="flag" viewBox="0 0 60 30" aria-hidden="true">
+                  <clipPath id="uk-clip-pause"><path d="M0 0v30h60V0z"/></clipPath>
+                  <clipPath id="uk-diag-pause"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath>
+                  <g clip-path="url(#uk-clip-pause)">
+                    <path d="M0 0v30h60V0z" fill="#012169"/>
+                    <path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/>
+                    <path d="M0 0l60 30m0-30L0 30" clip-path="url(#uk-diag-pause)" stroke="#c8102e" stroke-width="4"/>
+                    <path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/>
+                    <path d="M30 0v30M0 15h60" stroke="#c8102e" stroke-width="6"/>
+                  </g>
+                </svg>
+                <span>English</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <button type="button" id="resume-btn" class="primary">Resume</button>
+        <button type="button" id="resume-btn" class="primary">Fortsett</button>
         <div class="menu-tools">
-          <button type="button" id="quit-btn" class="ghost">Power down</button>
+          <button type="button" id="quit-btn" class="ghost">Avslutt kampen</button>
           <button
             type="button"
             id="exit-btn-pause"
             class="ghost exit-btn"
             hidden
           >
-            Back to the arcade
+            Tilbake til arkaden
           </button>
         </div>
       </section>
@@ -470,16 +557,16 @@
       >
         <div class="plate-strip" aria-hidden="true"></div>
         <header class="screen-head">
-          <p class="kicker">Final standings</p>
-          <h2 id="mo-title">Match over</h2>
+          <p class="kicker" data-i18n="mo.kicker">Sluttresultat</p>
+          <h2 id="mo-title" data-i18n="mo.title">Kampen er over</h2>
           <p id="mo-champ" class="blurb"></p>
         </header>
         <div id="mo-rows" class="rows"></div>
-        <button type="button" id="mo-again" class="primary">Again</button>
+        <button type="button" id="mo-again" class="primary" data-i18n="again">Spill igjen</button>
         <div class="screen-foot">
           <div class="menu-tools">
             <button type="button" id="exit-btn-over" class="ghost exit-btn" hidden>
-              Back to the arcade
+              Tilbake til arkaden
             </button>
           </div>
         </div>
@@ -497,8 +584,8 @@
           id="screen-toggle"
           class="icon-button"
           aria-pressed="false"
-          aria-label="Fullscreen"
-          title="Fullscreen"
+          aria-label="Fullskjerm"
+          title="Fullskjerm"
           hidden
         >
           <!-- Four corners pushing out, and the same four pulled in for the
@@ -512,6 +599,7 @@
           type="button"
           id="pause-btn"
           class="icon-button"
+          data-i18n-label="pause"
           aria-label="Pause"
           title="Pause"
           hidden
@@ -546,6 +634,24 @@
       // Surface load-time failures instead of a silent dark canvas.
       (function () {
         var bar = document.getElementById("crash");
+        // Its own words, read off <html lang> at the moment something breaks:
+        // this script is what reports js/i18n.js failing, so it cannot lean
+        // on it.
+        var WORDS = {
+          nb: {
+            script: "Et skript ville ikke laste: ",
+            hint: " (står det js/main.js, kan den egentlige synderen være en av filene den henter inn)",
+            broke: "Noe gikk i stykker: ",
+          },
+          en: {
+            script: "A script failed to load: ",
+            hint: " (if this is js/main.js, the real culprit may be one of its imports)",
+            broke: "Something broke: ",
+          },
+        };
+        function w() {
+          return WORDS[document.documentElement.lang] || WORDS.en;
+        }
         function show(msg) {
           bar.textContent = msg;
           bar.hidden = false;
@@ -561,20 +667,16 @@
             if (t && t.tagName === "SCRIPT" && t.dataset && t.dataset.handled)
               return;
             if (t && t.tagName === "SCRIPT") {
-              show(
-                "A script failed to load: " +
-                  t.src +
-                  " (if this is js/main.js, the real culprit may be one of its imports)",
-              );
+              show(w().script + t.src + w().hint);
               return;
             }
-            show("Something broke: " + (e.message || e.type));
+            show(w().broke + (e.message || e.type));
           },
           true,
         );
         window.addEventListener("unhandledrejection", function (e) {
           show(
-            "Something broke: " +
+            w().broke +
               (e.reason && e.reason.message ? e.reason.message : e.reason),
           );
         });

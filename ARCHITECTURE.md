@@ -54,6 +54,9 @@ tankwars/
     screen.js               fullscreen pill (self-contained; not fullscreen.js) [assets]
     input.js                keyboard + pointer -> intents                     [ui]
     ui.js                   setup screen, HUD, shop, scoreboard, banners      [ui]
+    i18n.js                 every word, bokmål (default) + English; t(),
+                            setLang(), `arcade:lang`; shared key
+                            arcade.lang.v1 (hub §2 "Two languages")       [ui]
     audio.js                cue loader/mixer for audio/*.m4a                  [assets]
     sim/
       rng.js                mulberry32                                        [sim]
