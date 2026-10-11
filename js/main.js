@@ -124,7 +124,23 @@ const ui = createUI({
   onPause: pause,
   onResume: resume,
   onQuit: quitMatch,
-  onVolume: (v) => audio.setVolume(v),
+  // Dragging either slider lifts the mute (hub §2: a volume you cannot hear
+  // is one you cannot use), and EFFECTS auditions itself. MUSIC has nothing
+  // to play yet — Lobbots has no music — so it only keeps its level.
+  onVolume: (v) => {
+    audio.setVolume(v);
+    audio.audition();
+    ui.setMuted(audio.muted);
+  },
+  onMusic: (v) => {
+    audio.setMusic(v);
+    ui.setMuted(audio.muted);
+  },
+  onMenu,
+  onMute: () => {
+    audio.setMuted(!audio.muted);
+    ui.setMuted(audio.muted);
+  },
   onSkip: () => (net ? net.replica.send({ t: 'skip' }) : skipRound()),
   onOnline: openLobby,
   onCloseHangar: closeHangar,
@@ -313,7 +329,8 @@ function pause() {
 }
 
 function resume() {
-  if (net) { ui.hidePause(); return; }
+  // The Settings face (no match on) has Back where Resume is: it just closes.
+  if (mode !== 'play' || net) { ui.hidePause(); return; }
   if (!paused) return;
   paused = false;
   ui.hidePause();
@@ -328,6 +345,17 @@ function togglePause() {
 }
 
 /*
+ * THE MENU PLATE, top left of the corner's three (index.html). In a match it
+ * is exactly Escape: the in-play menu, up or down. Anywhere else it opens the
+ * same panel's Settings face, and a second tap closes it again.
+ */
+function onMenu() {
+  if (mode === 'play') { togglePause(); return; }
+  if (ui.paused) ui.hidePause();
+  else ui.showSettings();
+}
+
+/*
  * ESCAPE GOES ONE STEP BACK, and from the setup screen that step is the
  * arcade (hub §2, 2026-10-11). js/input.js has already kept the press away
  * from every other control and from the browser, so this is the whole of
@@ -338,6 +366,7 @@ function togglePause() {
  *                      says so. The shop, the scoreboard and the final table
  *                      are all inside the match, and the menu opens over them
  *                      the way it always has.
+ *   Settings is open   its Back: the panel closes, nothing else moves.
  *   the lobby is up    its own Back, from whichever view it is on: the
  *                      keypad to the chooser, a guest out of the room, the
  *                      chooser to the setup screen.
@@ -347,6 +376,8 @@ function togglePause() {
  */
 function onEscape() {
   if (mode === 'play') { togglePause(); return; }
+  // The Settings face is a panel like any other: Escape is its Back.
+  if (ui.paused) { ui.hidePause(); return; }
   if (ui.screen === 'lobby') { lobby?.back(); return; }
   if (ui.screen === 'setup') ui.exit();
 }
@@ -973,6 +1004,8 @@ window.addEventListener('pointerdown', unlock);
 window.addEventListener('keydown', unlock);
 
 ui.setVolume(audio.volume);
+ui.setMusic(audio.music);
+ui.setMuted(audio.muted);
 ui.setBotSpeed(botSpeed);
 
 // The way back to the arcade. exit.js is a deferred classic script from

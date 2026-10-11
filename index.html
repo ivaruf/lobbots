@@ -468,7 +468,13 @@
         <button type="button" id="shop-done" class="primary" data-i18n="done">Ferdig</button>
       </section>
 
-      <!-- =========================== PAUSE ============================ -->
+      <!-- ======================= THE MENU PANEL ========================
+           The one menu, behind the three-bar plate. Two faces, one panel
+           (js/ui.js): in a match it is the in-play menu — Pause and Resume
+           hot-seat, Menu and Back online, where nothing stops — and anywhere
+           else it is Settings, with Back where Resume was and no Quit match,
+           because there is no match to quit. Sound, language and bot speed
+           are the same rows in both, and the way out is last in both. -->
       <section
         id="pause"
         class="screen panel"
@@ -486,8 +492,20 @@
         </header>
 
         <div class="pause-opts">
+          <!-- The two volumes (hub §2, "Two volumes"): MUSIC and EFFECTS,
+               always both, even though Lobbots has no music yet. The music
+               level is kept for real (lobbots.vol.music.v1), so the day a
+               theme arrives it arrives at the level its listener chose, and
+               the hint underneath says plainly that there is none today. -->
           <div class="row">
-            <label class="label" for="volume" data-i18n="sound">Lyd</label>
+            <label class="label" for="vol-music" data-i18n="music">Musikk</label>
+            <div class="slider">
+              <input type="range" id="vol-music" min="0" max="100" step="1" value="80" />
+              <output id="vol-music-out" for="vol-music">80</output>
+            </div>
+          </div>
+          <div class="row">
+            <label class="label" for="volume" data-i18n="effects">Effekter</label>
             <div class="slider">
               <input
                 type="range"
@@ -500,6 +518,7 @@
               <output id="volume-out" for="volume">80</output>
             </div>
           </div>
+          <p class="blurb sound-hint" data-i18n="musicHint">Lobbots har ingen musikk ennå. Nivået huskes til den kommer.</p>
           <!-- How fast the bots play: their thinking, aiming and shells, on
                their turns and for the rest of a round you are out of. Your
                own shot always flies at ×1. js/main.js keeps the number. -->
@@ -585,13 +604,52 @@
         </div>
       </section>
 
-      <!-- THE CORNER. Present on every screen, so the top right means the
-           same thing on the setup panel as it does mid-round. Both pills
-           start hidden: js/screen.js un-hides the fullscreen one only once
-           the browser has answered that it has element fullscreen at all
-           (iPhone Safari does not), and js/ui.js shows the pause pill only
-           while a round is actually running. -->
+      <!-- THE CORNER: three plates, on every screen, and nothing else up
+           there (hub §2, 2026-10-11). Left to right, menu, sound, fullscreen,
+           so fullscreen is the one in the actual corner; the same three paths
+           as every other cabinet, to the path data.
+
+             menu        the one menu panel (#pause): the in-play menu while a
+                         match is on — pausing a hot-seat game, not an online
+                         one — and the same panel's Settings face anywhere
+                         else. It is what Escape does in play. It replaced the
+                         pause pill that used to stand here in play only.
+             sound       a live mute: one tap, nothing opened, nothing paused.
+                         The levels themselves are the two sliders in the menu.
+             fullscreen  js/screen.js, self-contained, hidden until the
+                         browser has answered that it has element fullscreen
+                         (iPhone Safari does not).
+
+           js/ui.js wires the first two and keeps aria-pressed and the label
+           in step; CSS picks the glyph off aria-pressed. -->
       <div id="corner">
+        <button
+          type="button"
+          id="menu-btn"
+          class="icon-button"
+          data-i18n-label="menu"
+          aria-label="Meny"
+          title="Meny"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="mute-btn"
+          class="icon-button"
+          aria-pressed="false"
+          aria-label="Slå av lyden"
+          title="Slå av lyden"
+        >
+          <!-- The speaker, with waves while audible and a slash while muted. -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M11 5 6 9H3v6h3l5 4Z" />
+            <path class="icon-off" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" />
+            <path class="icon-on" d="m15.5 9.5 6 5m0-5-6 5" />
+          </svg>
+        </button>
         <button
           type="button"
           id="screen-toggle"
@@ -605,20 +663,7 @@
                pressed state. CSS shows one and hides the other. -->
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path class="icon-off" d="M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6" />
-            <path class="icon-on" d="M3 9h6V3m12 6h-6V3M9 15H3v6m12 0v-6h6" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          id="pause-btn"
-          class="icon-button"
-          data-i18n-label="pause"
-          aria-label="Pause"
-          title="Pause"
-          hidden
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 5v14M15 5v14" />
+            <path class="icon-on" d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6" />
           </svg>
         </button>
       </div>

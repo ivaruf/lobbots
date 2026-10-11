@@ -358,7 +358,7 @@ Controls, all leading to the same actions:
 | Weapon | `Q` `E` / `Tab` | weapon strip, tap to select |
 | Fire | `Space` `Enter` | big FIRE button |
 | Walk (Move selected) | `←` `→` move the marker, `Space` walks | ◂ ▸ pills or drag; FIRE reads WALK |
-| Pause | `Esc` | pause pill, top right |
+| Pause | `Esc` | three-bar menu plate, top right |
 
 HUD shows current player and colour, health, angle, power, weapon and ammo,
 wind arrow with a number. Controls lock from `fire` until the next `turnStart`.
@@ -407,9 +407,10 @@ headings condensed bold uppercase. No web fonts (hub rule).
 #field           the one canvas, fills the viewport under everything
 #ui              overlay root for every screen
 #setup #hud #scoreboard #shop #pause #matchover   screen sections (hidden attribute toggles)
-#corner          top-right pill cluster present on every screen
-  #screen-toggle   fullscreen pill, starts hidden, owned by js/screen.js
-  #pause-btn       pause pill, shown only during play
+#corner          the hub's three plates, on every screen, left to right:
+  #menu-btn        three bars: the menu panel (#pause) — in-play menu in a match, Settings face elsewhere
+  #mute-btn        live mute toggle (aria-pressed; waves/slash glyph), persisted at lobbots.muted.v1
+  #screen-toggle   fullscreen, starts hidden, owned by js/screen.js
 #update          UPDATE READY button inside #setup, starts hidden, owned by js/update.js
                  (contains .update-title and .update-sub spans)
 #build           build line inside #setup, starts hidden, written by js/update.js
@@ -508,7 +509,10 @@ import { createAudio } from './audio.js';
 const audio = createAudio();
 audio.unlock();                          // first gesture; creates and resumes the context, starts decoding
 audio.play(name, { gain = 1, rate = 1 } = {});
-audio.setVolume(v); audio.volume;        // persisted at lobbots.vol.sfx.v1
+audio.setVolume(v); audio.volume;        // persisted at lobbots.vol.sfx.v1 (EFFECTS)
+audio.setMusic(v);  audio.music;         // lobbots.vol.music.v1 — kept, no music plays yet
+audio.setMuted(b);  audio.muted;         // lobbots.muted.v1, the corner's mute plate
+audio.audition();                        // one click, throttled on ctx.currentTime
 ```
 Cues in `audio/<name>.m4a`: `fire`, `whistle`, `boom`, `boom-big`,
 `bounce`, `splat` (dirt), `crumble`, `wreck`, `kaching`, `fanfare`, `click`.

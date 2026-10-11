@@ -37,6 +37,23 @@ const VOLUME_KEY = "lobbots.vol.sfx.v1";
 const DEFAULT_VOLUME = 0.8;
 
 /*
+ * MUSIC THAT DOES NOT EXIST YET. Hub §2 wants MUSIC and EFFECTS in every
+ * game's menu, and Lobbots has cues and no score. The music level is kept
+ * anyway, under the hub's own name for it, so the day a theme arrives it
+ * plays at the level its listener already chose — and the menu's hint line
+ * says plainly that there is nothing to hear today. Nothing here routes it
+ * anywhere: there is no music bus to build until there is music.
+ *
+ * MUTE is the corner's live plate: one tap, nothing opened. It is kept apart
+ * from both levels so unmuting gives back exactly what was there.
+ */
+const MUSIC_KEY = "lobbots.vol.music.v1";
+const MUTED_KEY = "lobbots.muted.v1";
+
+/** A slider's audition may sound this often, on the AUDIO clock (hub §2). */
+const AUDITION_GAP = 0.09;
+
+/*
  * The cue list, and the file names under audio/. Order is only cosmetic — they
  * all load in parallel — but it is grouped the way the game uses them: firing,
  * flight, the four kinds of landing, the ground giving way, then the screens.
@@ -78,14 +95,33 @@ function clamp(v, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
 }
 
-function readStoredVolume() {
+function readStoredVolume(key = VOLUME_KEY) {
   try {
-    const stored = localStorage.getItem(VOLUME_KEY);
+    const stored = localStorage.getItem(key);
     if (stored === null) return DEFAULT_VOLUME;
-    return clamp(stored, 0, 1);
+    // Anything on the origin may have written here: a non-finite value is
+    // not a level, so it gets the default rather than clamp()'s floor.
+    const n = Number(stored);
+    return Number.isFinite(n) ? clamp(n, 0, 1) : DEFAULT_VOLUME;
   } catch {
     // Private mode, or storage disabled entirely. Default volume, no fuss.
     return DEFAULT_VOLUME;
+  }
+}
+
+function readStoredMuted() {
+  try {
+    return localStorage.getItem(MUTED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function store(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Storage unavailable; the in-memory value still governs this session.
   }
 }
 
@@ -93,6 +129,9 @@ export function createAudio() {
   let ctx = null;
   let master = null;
   let volume = readStoredVolume();
+  let music = readStoredVolume(MUSIC_KEY);
+  let muted = readStoredMuted();
+  let lastAudition = -1;
   let loadStarted = false;
 
   /** name -> AudioBuffer. A name is present here only once it has decoded. */
@@ -131,7 +170,7 @@ export function createAudio() {
   /** Glide the master gain instead of snapping it, so dragging a volume
    *  slider ramps rather than clicking on every "input" event. */
   function applyVolume() {
-    if (master) master.gain.setTargetAtTime(volume, ctx.currentTime, 0.01);
+    if (master) master.gain.setTargetAtTime(muted ? 0 : volume, ctx.currentTime, 0.01);
   }
 
   /**
@@ -146,7 +185,7 @@ export function createAudio() {
         if (!AudioCtor) return;
         ctx = new AudioCtor();
         master = ctx.createGain();
-        master.gain.value = volume;
+        master.gain.value = muted ? 0 : volume;
         master.connect(ctx.destination);
       }
       if (ctx.state === "suspended") ctx.resume();
@@ -221,21 +260,63 @@ export function createAudio() {
     live.push(source);
   }
 
+  /** Moving a level lifts the mute: a slider silently cancelled elsewhere
+   *  is worse than no slider (hub §2). */
+  function unmute() {
+    if (!muted) return;
+    muted = false;
+    store(MUTED_KEY, "0");
+  }
+
   /** 0..1, persisted. Takes effect immediately, live sources included. */
   function setVolume(v) {
     volume = clamp(v, 0, 1);
-    try {
-      localStorage.setItem(VOLUME_KEY, String(volume));
-    } catch {
-      // Storage unavailable; the in-memory value still governs this session.
-    }
+    store(VOLUME_KEY, String(volume));
+    unmute();
     applyVolume();
+  }
+
+  /** 0..1, persisted, and inaudible until there is music (see the top). */
+  function setMusic(v) {
+    music = clamp(v, 0, 1);
+    store(MUSIC_KEY, String(music));
+    unmute();
+    applyVolume();
+  }
+
+  /** The corner's mute plate. Live, persisted, levels left alone. */
+  function setMuted(m) {
+    muted = !!m;
+    store(MUTED_KEY, muted ? "1" : "0");
+    applyVolume();
+  }
+
+  /**
+   * One click while the EFFECTS slider moves, so the level can be heard as
+   * it is set. Throttled on ctx.currentTime and not on the simulation clock,
+   * which is held while the menu is up and would let it fire once a session.
+   */
+  function audition() {
+    if (!ctx) return;
+    if (ctx.currentTime - lastAudition < AUDITION_GAP) return;
+    lastAudition = ctx.currentTime;
+    play("click", { gain: 0.8 });
   }
 
   return {
     unlock,
     play,
     setVolume,
+    setMusic,
+    setMuted,
+    audition,
+    /** The kept music level, 0..1 (no music plays yet). */
+    get music() {
+      return music;
+    },
+    get muted() {
+      return muted;
+    },
     /** The current effects volume, 0..1. Read by ui.js to paint the slider. */
     get volume() {
       return volume;

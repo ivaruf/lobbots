@@ -57,6 +57,11 @@
 
   /* Comfortable for a finger; a tablet is the common case. */
   --tap: 44px;
+  /* The corner's footprint: three plates, two 6px gaps, 8px off the edge.
+     Everything that must stay clear of it reads these, so they follow --tap
+     down on a sideways phone without a second number to keep in step. */
+  --corner-w: calc(3 * var(--tap) + 12px + 8px);
+  --corner-h: calc(var(--tap) + 8px);
 
   color-scheme: dark;
 }
@@ -796,8 +801,9 @@ button:disabled {
 
 #hud-top {
   top: 0;
-  /* Room on the right for #corner, which floats above this strip. */
-  padding: 8px 106px 10px 10px;
+  /* Room on the right for #corner's three plates, which float above this
+     strip — the HUD gave the corner up to them (hub §2, 2026-10-11). */
+  padding: 8px calc(var(--corner-w) + 6px) 10px 10px;
   align-items: center;
   flex-wrap: wrap;
   background: linear-gradient(180deg, rgba(15, 17, 22, 0.85), rgba(15, 17, 22, 0));
@@ -1432,6 +1438,10 @@ button:disabled {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
+.icon-button[hidden] {
+  /* The trap the hub names: display:grid above outranks the [hidden] hint. */
+  display: none;
+}
 .icon-button:hover {
   border-color: var(--accent);
   color: var(--accent);
@@ -1566,7 +1576,7 @@ button:disabled {
     font-size: 20px;
   }
   #hud-top {
-    padding: 6px 100px 8px 8px;
+    padding: 6px calc(var(--corner-w) + 4px) 8px 8px;
     gap: 7px;
   }
   #hp-bar {
@@ -1847,7 +1857,7 @@ button:disabled {
     font-size: 19px;
   }
   #hud-top {
-    padding: 5px 100px 8px 8px;
+    padding: 5px calc(var(--corner-w) + 4px) 8px 8px;
   }
   #callout {
     top: 14%;
@@ -2427,4 +2437,54 @@ button:active:not(:disabled) {
   #room-code { grid-area: code; }
   #room-rules { grid-area: rules; }
   #room-seats { grid-area: seats; max-height: 52vh; }
+}
+
+/* ===================== room for the corner =====================
+ * The corner's three plates sit over every screen (hub §2), and on a phone a
+ * centred panel reaches right up under them. Two shapes, one per way up:
+ *
+ *   narrow, upright   the panel's frame starts below the plates. It gives up
+ *                     one plate's height, which the roster, the shop rows and
+ *                     the standings absorb — each scrolls inside itself.
+ *   sideways phone    height is the scarce thing, so the plates get a column
+ *                     of their own on the right instead and the panel is
+ *                     centred in what is left: the same two-column layouts,
+ *                     a little narrower, and no row lost. (Setup is the
+ *                     exception, below.)
+ *
+ * `#ui > .screen` so these win over the per-screen rules above (#setup,
+ * #lobby) without !important. Wider and taller screens need neither: the
+ * panel stops short of the corner on its own. */
+@media (max-width: 780px) {
+  #ui > .screen {
+    top: calc(50% + var(--corner-h) / 2);
+    max-height: calc(100% - var(--corner-h) - 16px);
+  }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  #ui > .screen {
+    top: 50%;
+    left: calc(50% - var(--corner-w) / 2);
+    width: min(780px, calc(100% - var(--corner-w) - 16px));
+    max-height: calc(100% - 12px);
+  }
+  /* Except the setup screen, which is two dense columns already and cannot
+     spare the width: it keeps its full size, and only the row the plates
+     actually sit over — the language, top of the right column — steps in
+     from the right by however much of the corner overhangs the panel. */
+  #ui > #setup {
+    left: 50%;
+    width: min(780px, calc(100% - 16px));
+    height: calc(100% - 16px);
+  }
+  #setup > .lang-row {
+    padding-right: max(0px, calc(var(--corner-w) + 6px - (100vw - min(780px, 100vw - 16px)) / 2 - 14px));
+  }
+}
+
+/* The Settings face (no match on) opens over whichever screen called it, and
+ * two plates stacked one on the other read as neither. The one underneath
+ * steps out of sight until Back — still there, nothing reset. */
+#ui.menu-over > .screen:not(#pause) {
+  visibility: hidden;
 }

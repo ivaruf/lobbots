@@ -1,6 +1,6 @@
 /*
  * ui.js — every screen a player reads or taps: setup, HUD, scoreboard, the
- * parts counter, pause and the final standings.
+ * parts counter, the menu panel and the final standings.
  *
  * The contract is ARCHITECTURE.md §12. main.js hands this file callbacks and
  * calls the show and update methods on it; this file never touches the Match
@@ -520,6 +520,9 @@ export function createUI(callbacks = {}) {
     onResume() {},
     onQuit() {},
     onVolume() {},
+    onMusic() {},
+    onMenu() {},
+    onMute() {},
     onBotSpeed() {},
     onSkip() {},
     onOnline() {},
@@ -538,7 +541,8 @@ export function createUI(callbacks = {}) {
     lobby: $('lobby'),
   };
   const pausePanel = $('pause');
-  const pauseBtn = $('pause-btn');
+  const menuBtn = $('menu-btn');
+  const muteBtn = $('mute-btn');
   const callout = $('callout');
   const calloutTitle = $('callout-title');
   const calloutSub = $('callout-sub');
@@ -610,6 +614,8 @@ export function createUI(callbacks = {}) {
   const quitBtn = $('quit-btn');
   const volume = $('volume');
   const volumeOut = $('volume-out');
+  const music = $('vol-music');
+  const musicOut = $('vol-music-out');
   const botSpeed = $('bot-speed');
   const botSpeedOut = $('bot-speed-out');
   const botSpeedRow = $('bot-speed-row');
@@ -1204,9 +1210,15 @@ export function createUI(callbacks = {}) {
     cb.onFire();
   });
 
-  pauseBtn.addEventListener('click', (e) => {
+  // The corner's first two plates (index.html, THE CORNER). Neither may let
+  // its tap reach the battlefield underneath, and neither moves focus.
+  menuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    cb.onPause();
+    cb.onMenu();
+  });
+  muteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    cb.onMute();
   });
 
   /** One button per weapon the current player can actually fire. */
@@ -1373,13 +1385,16 @@ export function createUI(callbacks = {}) {
     }
 
     // ---- shot timer ------------------------------------------------------
-    const t = match.timeLeft > 0 ? Math.ceil(match.timeLeft) : 0;
-    if (t !== seen.timer) {
-      seen.timer = t;
-      shotTimer.hidden = t <= 0;
-      if (t > 0) {
-        setText(shotTimer, t);
-        shotTimer.classList.toggle('urgent', t <= 5);
+    // `secs`, not `t`: a `const t` anywhere in this function shadows the
+    // imported t() for ALL of it, and every t() call above then throws in
+    // the temporal dead zone — which it did, on the first HUD frame.
+    const secs = match.timeLeft > 0 ? Math.ceil(match.timeLeft) : 0;
+    if (secs !== seen.timer) {
+      seen.timer = secs;
+      shotTimer.hidden = secs <= 0;
+      if (secs > 0) {
+        setText(shotTimer, secs);
+        shotTimer.classList.toggle('urgent', secs <= 5);
       }
     }
   }
@@ -1416,9 +1431,7 @@ export function createUI(callbacks = {}) {
     // the pause panel lands on the setup screen, and leaving the overlay up
     // over it would strand the player behind a panel about a match that no
     // longer exists.
-    pausePanel.hidden = true;
-    // The pause pill belongs to a round in progress and nothing else.
-    pauseBtn.hidden = !onHud;
+    closeMenu();
   }
 
   // =========================================================================
@@ -1682,6 +1695,57 @@ export function createUI(callbacks = {}) {
     setText(volumeOut, v);
     cb.onVolume(v / 100);
   });
+  music.addEventListener('input', () => {
+    const v = Math.max(0, Math.min(100, Number(music.value) || 0));
+    setText(musicOut, v);
+    cb.onMusic(v / 100);
+  });
+
+  // =========================================================================
+  // The menu panel's two faces
+  // =========================================================================
+
+  /*
+   * One panel, #pause, behind the three-bar plate. 'play' is the in-play
+   * menu (setOnline below words it: Pause/Resume hot-seat, Menu/Back
+   * online); 'settings' is the same panel anywhere a match is not on — Back
+   * where Resume was, and no Quit match, because there is no match to quit.
+   * While Settings is up, the screen it opened over steps out of sight
+   * (#ui.menu-over in the CSS) rather than showing two panels at once.
+   */
+  let face = 'play';
+  function openMenu(which) {
+    face = which;
+    paintFace();
+    pausePanel.hidden = false;
+    $('ui').classList.toggle('menu-over', which === 'settings');
+    pausePanel.focus?.();
+  }
+  function closeMenu() {
+    pausePanel.hidden = true;
+    $('ui').classList.remove('menu-over');
+  }
+  function paintFace() {
+    if (face === 'settings') {
+      setText(pauseKicker, t('settings.kicker'));
+      setText(pauseTitle, t('settings'));
+      pauseNote.hidden = true;
+      setText(resumeBtn, t('back'));
+      quitBtn.closest('.menu-tools').hidden = true;
+      botSpeedRow.hidden = pauseRole === 'guest';
+    } else {
+      quitBtn.closest('.menu-tools').hidden = false;
+      setOnline(pauseRole);
+    }
+  }
+
+  /** The mute plate: aria-pressed picks the glyph, the label says the act. */
+  function paintMute(muted) {
+    muteBtn.setAttribute('aria-pressed', String(!!muted));
+    const label = t(muted ? 'unmute' : 'mute');
+    muteBtn.setAttribute('aria-label', label);
+    muteBtn.title = label;
+  }
 
   // =========================================================================
   // The callout — a turn, a round, a purchase, then gone
@@ -1814,7 +1878,8 @@ export function createUI(callbacks = {}) {
     }
     if (!screens.shop.hidden && shopAgain) shopAgain();
     if (!screens.matchover.hidden && moMatch) showMatchOver(moMatch);
-    setOnline(pauseRole);
+    paintFace();
+    paintMute(muteBtn.getAttribute('aria-pressed') === 'true');
     if (!callout.hidden) {
       setText(calloutTitle, said(calloutSays.title));
       setText(calloutSub, said(calloutSays.sub));
@@ -1932,21 +1997,20 @@ export function createUI(callbacks = {}) {
     showBotShopping,
     showMatchOver,
 
+    /** The in-play face of the menu panel. */
     showPause() {
-      pausePanel.hidden = false;
-      // A pause pill beside an open pause menu is a button asking to be
-      // pressed twice.
-      pauseBtn.hidden = true;
-      pausePanel.focus?.();
+      openMenu('play');
     },
-    hidePause() {
-      pausePanel.hidden = true;
-      pauseBtn.hidden = !onHud;
+    /** The Settings face: the same panel, anywhere a match is not on. */
+    showSettings() {
+      openMenu('settings');
     },
-    /** Whether the pause panel is currently up, so main need not track it. */
+    hidePause: closeMenu,
+    /** Whether the menu panel is up (either face), so main need not track it. */
     get paused() {
       return !pausePanel.hidden;
     },
+    setMuted: paintMute,
 
     banner,
     setExit,
@@ -1974,7 +2038,14 @@ export function createUI(callbacks = {}) {
       volume.value = String(pct);
       setText(volumeOut, pct);
     },
+    /** Music volume as 0..1. Sets the slider without calling back. */
+    setMusic(v) {
+      const pct = Math.round(Math.max(0, Math.min(1, Number(v) || 0)) * 100);
+      music.value = String(pct);
+      setText(musicOut, pct);
+    },
   };
   setOnline(null);
+  paintMute(false);
   return api;
 }

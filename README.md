@@ -66,7 +66,7 @@ during a match, and on the setup screen it is the Back to arcade button.
 | Weapon        | `Q` `E` or `Tab`               | tap it in the strip                    |
 | Fire          | `Space` or `Enter`             | FIRE                                   |
 | Walk (Move)   | `←` `→` place the marker, `Space` walks | ◂ ▸ pills or drag, then WALK  |
-| Pause, one step back | `Esc`                   | the pause pill, top right              |
+| Pause, one step back | `Esc`                   | the three-bar menu plate, top right    |
 
 ## The arsenal
 

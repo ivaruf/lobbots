@@ -311,6 +311,16 @@ const STRINGS = {
     'quitGuest': 'Forlat kampen',
     'exit.arcade': 'Tilbake til arkaden',
     'exit.app': 'Lukk',
+    // ---- the corner and the menu panel's sound rows (hub §2: three plates,
+    // and MUSIC / EFFECTS in every game, in the game's own case)
+    'menu': 'Meny',
+    'mute': 'Slå av lyden',
+    'unmute': 'Slå på lyden',
+    'music': 'Musikk',
+    'effects': 'Effekter',
+    'musicHint': 'Lobbots har ingen musikk ennå. Nivået huskes til den kommer.',
+    'settings': 'Innstillinger',
+    'settings.kicker': 'Lyd, språk og robotfart',
 
     // ---- banners
     'roundBanner': (r, n) => `Runde ${r} av ${n}`,
@@ -611,6 +621,15 @@ const STRINGS = {
     'quitGuest': 'Leave match',
     'exit.arcade': 'Back to arcade',
     'exit.app': 'Close',
+    // ---- the corner and the menu panel's sound rows
+    'menu': 'Menu',
+    'mute': 'Mute',
+    'unmute': 'Unmute',
+    'music': 'Music',
+    'effects': 'Effects',
+    'musicHint': 'Lobbots has no music yet. The level is kept for when it arrives.',
+    'settings': 'Settings',
+    'settings.kicker': 'Sound, language and bot speed',
 
     'roundBanner': (r, n) => `Round ${r} of ${n}`,
     'hill.rolling': 'Rolling hills',
