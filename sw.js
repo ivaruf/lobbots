@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.5.3'; // the language row leaves setup and lives in the menu panel only; the roster heads its column again
+const VERSION = 'v0.5.4'; // the update button always lands: a reload follows the tap even when controllerchange never comes
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is

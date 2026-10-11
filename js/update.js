@@ -78,6 +78,11 @@ function offer(worker) {
     button.disabled = true;
     paint();
     worker.postMessage({ type: "SKIP_WAITING" });
+    // controllerchange never comes after a hard refresh (the page is
+    // uncontrolled) or if this worker has gone redundant, and then the button
+    // would sit at "updating" forever. The tap was a request to reload, so a
+    // reload follows anyway (maxgear/js/main.js, dam_break/src/main.js).
+    setTimeout(() => location.reload(), 3000);
   };
 }
 
