@@ -146,42 +146,6 @@
           </div>
         </div>
 
-        <!-- THE LANGUAGE, before a run begins (hub §2, "Two languages"): the
-             player who needs it most is the stranger who cannot read the
-             Norwegian the game opened in. A child of #setup rather than of
-             .setup-opts so the sideways-phone grid can lift it into the
-             roster column, where there is height to spare. The same row sits
-             in the pause panel; each copy has its own clipPath ids, because
-             ids are page-global and the second Union Jack would otherwise
-             clip against the first. js/ui.js wires both. -->
-        <div class="row lang-row">
-          <span class="label" id="lbl-lang" data-i18n="language">Språk</span>
-          <div class="seg seg-lang" role="group" aria-labelledby="lbl-lang">
-            <button type="button" data-lang="nb" lang="nb" aria-pressed="false">
-              <svg class="flag" viewBox="0 0 22 16" aria-hidden="true">
-                <rect width="22" height="16" fill="#ba0c2f"/>
-                <path d="M6 0h4v16H6zM0 6h22v4H0z" fill="#fff"/>
-                <path d="M7 0h2v16H7zM0 7h22v2H0z" fill="#00205b"/>
-              </svg>
-              <span>Norsk</span>
-            </button>
-            <button type="button" data-lang="en" lang="en" aria-pressed="false">
-              <svg class="flag" viewBox="0 0 60 30" aria-hidden="true">
-                <clipPath id="uk-clip-setup"><path d="M0 0v30h60V0z"/></clipPath>
-                <clipPath id="uk-diag-setup"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath>
-                <g clip-path="url(#uk-clip-setup)">
-                  <path d="M0 0v30h60V0z" fill="#012169"/>
-                  <path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/>
-                  <path d="M0 0l60 30m0-30L0 30" clip-path="url(#uk-diag-setup)" stroke="#c8102e" stroke-width="4"/>
-                  <path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/>
-                  <path d="M30 0v30M0 15h60" stroke="#c8102e" stroke-width="6"/>
-                </g>
-              </svg>
-              <span>English</span>
-            </button>
-          </div>
-        </div>
-
         <!-- The roster. #seats scrolls inside its own box rather than growing
              the panel, so DEPLOY and the way out never leave the screen —
              ten seats is a lot of card on a phone. -->
@@ -536,8 +500,14 @@
               <output id="bot-speed-out" for="bot-speed">×1</output>
             </div>
           </div>
-          <!-- The language, mid-match: switching repaints in place and
-               neither unpauses nor restarts anything (hub §2). -->
+          <!-- The language: switching repaints in place and neither
+               unpauses nor restarts anything (hub §2). This panel is the
+               row's only home — on a match it is the pause menu, off one the
+               Settings face the corner's three bars open from setup — so the
+               setup screen spends its room on the rules, the roster, PLAY and
+               the way out (hub §2, "Two languages", Where, 2026-10-11). Its
+               clipPath ids keep their -pause suffix: ids are page-global, and
+               a second Union Jack anywhere would need its own. -->
           <div class="row lang-row">
             <span class="label" id="lbl-lang-pause" data-i18n="language">Språk</span>
             <div class="seg seg-lang" role="group" aria-labelledby="lbl-lang-pause">

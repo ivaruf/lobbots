@@ -1663,16 +1663,14 @@ button:disabled {
     font-size: 17px;
   }
 
-  /* ---- Setup: title, rules and PLAY down the left; the language heads the
-       right column, and the roster takes the rest of it and scrolls inside
-       itself. The language goes right rather than under the rules because
-       the left column is already the whole height of a sideways phone, and
-       the roster was always going to scroll anyway. ---- */
+  /* ---- Setup: title, rules and PLAY down the left; the roster takes the
+       right column and scrolls inside itself. (The language headed that
+       column for a day; it lives in the menu panel only now.) ---- */
   #setup {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
     grid-template-areas:
-      "head lang"
+      "head roster"
       "opts roster"
       "go   roster"
       "foot online";
@@ -1685,10 +1683,6 @@ button:disabled {
   }
   #setup .setup-opts {
     grid-area: opts;
-  }
-  #setup > .lang-row {
-    grid-area: lang;
-    align-self: start;
   }
   #setup #roster {
     grid-area: roster;
@@ -2124,7 +2118,7 @@ button:active:not(:disabled) {
     width: min(1080px, calc(100% - 72px));
     display: grid;
     grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.15fr);
-    grid-template-areas: 'head roster' 'opts roster' 'lang roster' 'deploy roster' 'online roster' 'foot roster';
+    grid-template-areas: 'head roster' 'opts roster' 'deploy roster' 'online roster' 'foot roster';
     gap: 20px 36px;
     padding: 36px;
     max-height: calc(100% - 64px);
@@ -2134,9 +2128,6 @@ button:active:not(:disabled) {
   }
   #setup .setup-opts {
     grid-area: opts;
-  }
-  #setup > .lang-row {
-    grid-area: lang;
   }
   #setup #roster {
     grid-area: roster;
@@ -2470,14 +2461,15 @@ button:active:not(:disabled) {
   }
   /* Except the setup screen, which is two dense columns already and cannot
      spare the width: it keeps its full size, and only the row the plates
-     actually sit over — the language, top of the right column — steps in
-     from the right by however much of the corner overhangs the panel. */
+     actually sit over — the roster's head, top of the right column, with the
+     seat buttons at its right end — steps in from the right by however much
+     of the corner overhangs the panel. */
   #ui > #setup {
     left: 50%;
     width: min(780px, calc(100% - 16px));
     height: calc(100% - 16px);
   }
-  #setup > .lang-row {
+  #setup .roster-head {
     padding-right: max(0px, calc(var(--corner-w) + 6px - (100vw - min(780px, 100vw - 16px)) / 2 - 14px));
   }
 }

@@ -1837,8 +1837,8 @@ export function createUI(callbacks = {}) {
   // =========================================================================
 
   /*
-   * Two copies of the row, one on the setup screen and one in the pause
-   * panel; both are wired here and both show the same choice. A tap repaints
+   * The row lives in the menu panel only (its pause face and its Settings
+   * face are one element). A tap repaints
    * in place (js/i18n.js dispatches arcade:lang, answered below) and changes
    * no screen: the pause panel stays open and the round stays paused.
    */

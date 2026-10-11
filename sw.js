@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.5.2'; // precache reads past the browser's HTTP cache, so an update can never mix old and new files
+const VERSION = 'v0.5.3'; // the language row leaves setup and lives in the menu panel only; the roster heads its column again
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is
