@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.5.1'; // Three plates in the corner on every screen, two volumes in the one menu
+const VERSION = 'v0.5.2'; // precache reads past the browser's HTTP cache, so an update can never mix old and new files
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is
@@ -97,10 +97,17 @@ const ASSETS = [
   './audio/click.m4a',
 ];
 
+// `cache: 'reload'` on everything the install stores. Without it the precache
+// reads through the browser's HTTP cache, which may still hold yesterday's copy
+// of a file, so a new version could be filed with some of the old files in it —
+// on 2026-10-11 dam_break ran a new screens.js against a stale sound.js and the
+// menu never wired up. The arcade learned this first (arcade/sw.js, `fresh`).
+const fresh = (url) => new Request(url, { cache: 'reload' });
+
 self.addEventListener('install', (event) => {
   // No skipWaiting() here: after precaching, the new worker stays WAITING until
   // the player accepts the update from the setup screen.
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS.map(fresh))));
 });
 
 self.addEventListener('message', (event) => {
