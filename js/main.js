@@ -141,7 +141,7 @@ const input = createInput(canvas, {
   onPower: (d) => aimDelta({ power: d }),
   onWeapon: selectWeapon,
   onFire: fire,
-  onPause: togglePause,
+  onEscape,
 });
 
 /** Is this player driven from this device? Everyone is, in hot-seat. */
@@ -325,6 +325,30 @@ function togglePause() {
   if (net) { if (ui.paused) resume(); else pause(); return; }
   if (paused) resume();
   else pause();
+}
+
+/*
+ * ESCAPE GOES ONE STEP BACK, and from the setup screen that step is the
+ * arcade (hub §2, 2026-10-11). js/input.js has already kept the press away
+ * from every other control and from the browser, so this is the whole of
+ * what it means:
+ *
+ *   a match is on      the pause menu, up or down — togglePause, so a hot-seat
+ *                      game stops and an online one carries on under it and
+ *                      says so. The shop, the scoreboard and the final table
+ *                      are all inside the match, and the menu opens over them
+ *                      the way it always has.
+ *   the lobby is up    its own Back, from whichever view it is on: the
+ *                      keypad to the chooser, a guest out of the room, the
+ *                      chooser to the setup screen.
+ *   the setup screen   exactly a press of Back to arcade, and only when that
+ *                      button is shown (ui.exit() checks). It used to do
+ *                      nothing here.
+ */
+function onEscape() {
+  if (mode === 'play') { togglePause(); return; }
+  if (ui.screen === 'lobby') { lobby?.back(); return; }
+  if (ui.screen === 'setup') ui.exit();
 }
 
 // ---------------------------------------------------------------------------
@@ -954,9 +978,21 @@ ui.setBotSpeed(botSpeed);
 // The way back to the arcade. exit.js is a deferred classic script from
 // another repo and may be absent (served alone) or late (slow network), so
 // look for it now and again shortly after load; both outcomes are normal.
+//
+// ONLY WHEN THERE IS SOMEWHERE TO GO, which is not the same question as
+// whether quit() could do something: in a plain tab it could — the arcade is
+// a URL — but somebody who typed this game's address did not come from the
+// arcade and may never have heard of it. So: a launcher behind us, or an
+// installed window that can genuinely close. Asked through framed() and
+// standalone() rather than exit.js's newer offers(), because the copy of
+// exit.js that answers may be cached from before offers() existed, and a
+// guard on a missing name fails closed — inside the arcade, where the way out
+// matters most. Returns true when exit.js has answered at all, so the retry
+// below stops either way.
 function wireExit() {
   const exit = window.ArcadeExit;
   if (!exit) return false;
+  if (!(exit.framed() || exit.standalone())) return true;
   // Plain words, the same in every game (hub §2), in this device's language;
   // wired again on every language switch below.
   const verb = exit.verb({ arcade: t('exit.arcade'), app: t('exit.app') });

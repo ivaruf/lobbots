@@ -229,6 +229,15 @@
 
         <button type="button" id="deploy" class="primary"><span data-i18n="play">Spill</span> <span class="go-arrow" aria-hidden="true">↗</span></button>
 
+        <!-- The way into online play (js/net/lobby.js), the second way in, so
+             it stands under PLAY and ahead of the foot. Sideways it moves to
+             the foot of the roster column — it is how the seats in it get
+             filled from other screens — and leaves the doors' column to PLAY
+             and the way out. -->
+        <div class="menu-tools" id="online-row">
+          <button type="button" id="online-btn" class="ghost" data-i18n="playOnline">Spill på nett</button>
+        </div>
+
         <div class="screen-foot">
           <!--
             UPDATE READY. Hidden until a new service worker has installed and
@@ -241,13 +250,18 @@
             <span class="update-title">Ny versjon klar</span>
             <span class="update-sub">Trykk for å hente den</span>
           </button>
-          <div class="menu-tools">
-            <!-- The way into online play (js/net/lobby.js). -->
-            <button type="button" id="online-btn" class="ghost" data-i18n="playOnline">Spill på nett</button>
-            <button type="button" id="exit-btn" class="ghost exit-btn" hidden>
-              Tilbake til arkaden
-            </button>
-          </div>
+          <!-- THE WAY BACK TO THE ARCADE, one button in every cabinet (hub
+               §2, 2026-10-11): the shared back arrow and sentence-case words,
+               last in the column and its full width, a little further off
+               than the rows above it. It used to share a row with Play online,
+               which made leaving look like a peer of a way in. js/ui.js
+               writes the words into the span (through ArcadeExit.verb(), in
+               the current language) and shows it only when there is somewhere
+               to go back to. -->
+          <button type="button" id="exit-btn" class="ghost exit-btn" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg>
+            <span class="exit-label">Tilbake til arkaden</span>
+          </button>
           <!-- Which build is actually serving this session, asked of the
                service worker rather than baked into the HTML. -->
           <p id="build" hidden></p>
@@ -537,15 +551,15 @@
         <button type="button" id="resume-btn" class="primary">Fortsett</button>
         <div class="menu-tools">
           <button type="button" id="quit-btn" class="ghost">Avslutt kampen</button>
-          <button
-            type="button"
-            id="exit-btn-pause"
-            class="ghost exit-btn"
-            hidden
-          >
-            Tilbake til arkaden
-          </button>
         </div>
+        <!-- The same way out, last in the in-play menu: the hub keeps it at
+             the top level of the start screen and of this panel, and on its
+             own row under Quit match rather than beside it, because one
+             leaves the match and the other leaves the game. -->
+        <button type="button" id="exit-btn-pause" class="ghost exit-btn" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg>
+          <span class="exit-label">Tilbake til arkaden</span>
+        </button>
       </section>
 
       <!-- ========================= MATCH OVER ========================= -->
@@ -564,11 +578,10 @@
         <div id="mo-rows" class="rows"></div>
         <button type="button" id="mo-again" class="primary" data-i18n="again">Spill igjen</button>
         <div class="screen-foot">
-          <div class="menu-tools">
-            <button type="button" id="exit-btn-over" class="ghost exit-btn" hidden>
-              Tilbake til arkaden
-            </button>
-          </div>
+          <button type="button" id="exit-btn-over" class="ghost exit-btn" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg>
+            <span class="exit-label">Tilbake til arkaden</span>
+          </button>
         </div>
       </section>
 

@@ -25,7 +25,11 @@ python3 -m http.server
 
 `file://` does not work: the game is ES modules. Serving the game directory
 alone means `../arcade/exit.js` is a 404 and the "Back to arcade" button
-simply does not appear; serve `~/projects/games` instead to see it.
+simply does not appear; serve `~/projects/games` instead to see it. Even
+then it only appears inside the arcade's frame or an installed window, never
+in a plain tab. It is the last row of the setup screen and of the pause menu.
+`Esc` goes one step back: the lobby's own Back, the pause menu in and out
+during a match, and on the setup screen it is the Back to arcade button.
 
 ## How a match goes
 
@@ -62,7 +66,7 @@ simply does not appear; serve `~/projects/games` instead to see it.
 | Weapon        | `Q` `E` or `Tab`               | tap it in the strip                    |
 | Fire          | `Space` or `Enter`             | FIRE                                   |
 | Walk (Move)   | `←` `→` place the marker, `Space` walks | ◂ ▸ pills or drag, then WALK  |
-| Pause         | `Esc`                          | the pause pill, top right              |
+| Pause, one step back | `Esc`                   | the pause pill, top right              |
 
 ## The arsenal
 

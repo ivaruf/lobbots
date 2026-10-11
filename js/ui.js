@@ -1717,15 +1717,29 @@ export function createUI(callbacks = {}) {
   // The way out
   // =========================================================================
 
+  /*
+   * Every door is the hub's one button (index.html): the words go into its
+   * .exit-label so the back arrow beside them survives a language switch.
+   * Escape on the setup screen is a press of the first of them, #exit-btn,
+   * through exit() below — the same function, and nothing at all when the
+   * button is not there to press.
+   */
+  let exitAction = null;
   function setExit(verb, onExit) {
+    exitAction = onExit;
     for (const btn of document.querySelectorAll('.exit-btn')) {
-      setText(btn, verb || t('exit.arcade'));
+      setText(btn.querySelector('.exit-label') || btn, verb || t('exit.arcade'));
       btn.hidden = false;
       btn.onclick = (e) => {
         e.stopPropagation();
         onExit();
       };
     }
+  }
+  function exit() {
+    if (!exitAction || $('exit-btn').hidden) return false;
+    exitAction();
+    return true;
   }
 
   // =========================================================================
@@ -1936,6 +1950,11 @@ export function createUI(callbacks = {}) {
 
     banner,
     setExit,
+    exit,
+    /** Which screen is up: 'setup', 'lobby', 'hud', 'shop', … (Escape asks). */
+    get screen() {
+      return Object.keys(screens).find((key) => !screens[key].hidden) || null;
+    },
 
     /** The skip button: up only while no human is standing this round. */
     setSkip(available) {

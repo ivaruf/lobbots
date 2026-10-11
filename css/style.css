@@ -353,6 +353,38 @@ button:disabled {
   min-width: 0;
 }
 
+/*
+ * THE WAY BACK TO THE ARCADE — one button in every cabinet (hub §2,
+ * 2026-10-11). The same object on the setup screen, in the pause menu and on
+ * the final table: last in its column and the column's full width, a little
+ * more room above it than between the rows it follows, the lab's quiet ghost
+ * plate rather than the lit primary — leaving is never the recommended
+ * action — and the shared back arrow, stroked like the corner glyphs, before
+ * sentence-case words. (`display: flex` here is safe against [hidden]: the
+ * global rule at the top of this file carries !important.)
+ */
+.exit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+.exit-btn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* One gutter for every row, so every control starts at the same x. */
 .row {
   display: flex;
@@ -1633,7 +1665,7 @@ button:disabled {
       "head lang"
       "opts roster"
       "go   roster"
-      "foot roster";
+      "foot online";
     align-content: center;
     align-content: safe center;
     gap: 8px 16px;
@@ -1656,8 +1688,22 @@ button:disabled {
     grid-area: go;
     align-self: center;
   }
+  /* The doors' column ends PLAY, then the way out — the hub's one button,
+   * last in its column (2026-10-11). Play online, which used to share that
+   * last row with it, takes the foot of the roster column instead: the left
+   * column was already the whole height of a sideways phone, and the roster
+   * is the one thing here that scrolls inside itself and can give a row up. */
   #setup .screen-foot {
     grid-area: foot;
+    align-self: end;
+  }
+  #setup #online-row {
+    grid-area: online;
+    align-self: end;
+    max-width: none;
+  }
+  #setup #exit-btn {
+    margin-top: 0;
   }
   #seats {
     flex: 1 1 auto;
@@ -1680,7 +1726,8 @@ button:disabled {
     grid-template-areas:
       "head opts"
       "go   opts"
-      "tools opts";
+      "tools opts"
+      "exit opts";
     align-content: center;
     align-content: safe center;
     align-items: center;
@@ -1697,6 +1744,11 @@ button:disabled {
   }
   #pause .menu-tools {
     grid-area: tools;
+  }
+  /* The way out is the last thing in the left column, under Quit match. */
+  #exit-btn-pause {
+    grid-area: exit;
+    margin-top: 2px;
   }
 
   /* ---- The HUD gives the field back as much height as it can ----
@@ -2062,7 +2114,7 @@ button:active:not(:disabled) {
     width: min(1080px, calc(100% - 72px));
     display: grid;
     grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.15fr);
-    grid-template-areas: 'head roster' 'opts roster' 'lang roster' 'deploy roster' 'foot roster';
+    grid-template-areas: 'head roster' 'opts roster' 'lang roster' 'deploy roster' 'online roster' 'foot roster';
     gap: 20px 36px;
     padding: 36px;
     max-height: calc(100% - 64px);
@@ -2088,10 +2140,15 @@ button:active:not(:disabled) {
   #setup #deploy {
     grid-area: deploy;
   }
+  #setup #online-row {
+    grid-area: online;
+  }
   #setup .screen-foot {
     grid-area: foot;
   }
-  #setup .screen-foot:has(.menu-tools:empty) {
+  /* Nothing showing in the foot — no update waiting, no way out to offer, no
+   * worker to name the build — and it would still cost a row and its gap. */
+  #setup .screen-foot:not(:has(> :not([hidden]))) {
     display: none;
   }
   #setup .seg-grid {

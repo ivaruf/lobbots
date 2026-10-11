@@ -413,7 +413,10 @@ headings condensed bold uppercase. No web fonts (hub rule).
 #update          UPDATE READY button inside #setup, starts hidden, owned by js/update.js
                  (contains .update-title and .update-sub spans)
 #build           build line inside #setup, starts hidden, written by js/update.js
-#exit-btn        "Back to the arcade" inside #setup and #pause, shown by ui.js only when window.ArcadeExit exists
+#exit-btn        "Back to arcade" (the hub's one button: back-arrow svg + .exit-label) last in #setup;
+                 #exit-btn-pause last in #pause and #exit-btn-over on #matchover are the same button.
+                 Shown by main.js/ui.js only when window.ArcadeExit exists AND framed() || standalone()
+#online-row      Play online, a direct child of #setup under #deploy (sideways: foot of the roster column)
 #crash           bottom error bar, hidden; index.html's inline handler fills it (copy NeonFox's, honour data-handled)
 ```
 Script tags at the end of body, in this order: the crash handler inline,
@@ -490,7 +493,9 @@ Keys: `←`/`→` swing the BARREL left and right (so `→` lowers the angle,
 because 0° points right), `↑`/`↓` power, hold accelerates fast (18/s →
 110/s over 0.9 s after a 0.2 s dwell: the whole 0–180 sweep in about two
 seconds); `Shift` = single steps; `Q`/`E`/`Tab` weapon; `Space`/`Enter`
-fire; `Esc` pause. Ignores keys when a button or text field has focus.
+fire; `Esc` one step back (main.js onEscape: pause menu in/out during a
+match, the lobby's Back, Back to arcade on the setup screen; in a text field
+it only blurs it). Ignores other keys when a button or text field has focus.
 Pointer: drag on the canvas: horizontal = barrel direction (4 px per
 degree, right is right), vertical = power (4 px per point); a tap without
 drag does nothing (no click-to-fire). The HUD's angle pills are ◂ ▸ and

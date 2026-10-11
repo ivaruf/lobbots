@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.4.0'; // Norwegian first, English a tap away, and menus that say Play, Back and Sound
+const VERSION = 'v0.5.0'; // One way out, the same in every cabinet, and Escape walks one step back toward it
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is

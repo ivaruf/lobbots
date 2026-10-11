@@ -220,11 +220,15 @@ export function createLobby({ onHost, onJoin, onBack, onLeave }) {
     heading('lobby.kicker', 'lobby.joinTitle');
   });
 
-  back.addEventListener('click', (e) => {
-    e.stopPropagation();
+  /* One Back, three meanings — and Escape is the same press (js/main.js). */
+  function goBack() {
     if (view === 'room') { onLeave(); return; }
     if (view === 'pad' && !busy) { open(); return; }
     onBack();
+  }
+  back.addEventListener('click', (e) => {
+    e.stopPropagation();
+    goBack();
   });
 
   /** `message` may be a function, as for say(). */
@@ -300,6 +304,7 @@ export function createLobby({ onHost, onJoin, onBack, onLeave }) {
     open,
     showRoom,
     say,
+    back: goBack,
     get name() { return name(); },
   };
 }

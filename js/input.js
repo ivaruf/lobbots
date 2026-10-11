@@ -8,7 +8,7 @@
  *     onPower(delta)   integer power points, signed
  *     onWeapon(dir)    -1 / +1 through the arsenal
  *     onFire()
- *     onPause()
+ *     onEscape()       one step back — main.js decides what that is
  *
  * Two rules give this file most of its shape.
  *
@@ -20,16 +20,19 @@
  * way to lose a match by brushing the screen.
  *
  * THE DOM OWNS ITS OWN KEYS. A key event whose target is a text field is that
- * field's business and we never see it. A button owns Enter, Space and Tab
+ * field's business and we never see it, except that Escape there leaves the
+ * field. A button owns Enter, Space and Tab
  * only when the player reached it WITH THE KEYBOARD, so
  * tabbing to a weapon and pressing Space picks it. A button that merely kept
  * focus after a mouse click owns nothing: clicking a weapon and then reaching
  * for the arrows and Space must aim and fire, not press the weapon again, and
  * until 2026-10-01 it silently did neither. Arrows, Q and E never belong to
  * a button at all. Escape is
- * the single exception in both directions: it pauses from anywhere, and it
- * pauses even when the sim has taken the controls away, because "I cannot get
- * out of this" is the one failure a pause button exists to prevent.
+ * the single exception in both directions: it works from anywhere, and even
+ * when the sim has taken the controls away, because "I cannot get out of
+ * this" is the one failure a pause button exists to prevent. It goes one step
+ * back (hub §2) — a panel's Back, the pause menu in play, the arcade from the
+ * setup screen — and js/main.js onEscape says which.
  *
  * Direction convention, chosen once and shared with the HUD pills: RIGHT and
  * UP raise the number on the readout. → and a rightward drag raise the angle,
@@ -78,7 +81,7 @@ export function createInput(canvas, handlers = {}) {
     onPower() {},
     onWeapon() {},
     onFire() {},
-    onPause() {},
+    onEscape() {},
     ...handlers,
   };
 
@@ -142,7 +145,7 @@ export function createInput(canvas, handlers = {}) {
     if (held.angle || held.power) raf = requestAnimationFrame(tick);
   }
 
-  /** A text field owns every key it gets, including Escape. */
+  /** A text field owns every key it gets — Escape only to leave it. */
   function isField(t) {
     if (!t || !t.tagName) return false;
     const tag = t.tagName;
@@ -176,14 +179,26 @@ export function createInput(canvas, handlers = {}) {
   }
 
   function onKeyDown(e) {
-    if (isField(e.target)) return;
+    if (isField(e.target)) {
+      // Escape in a field leaves the field and does nothing else. The lobby's
+      // callsign box sits on a screen where Escape is Back, and dismissing an
+      // autocomplete must not also walk the player out of the room.
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.target.blur();
+      }
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return; // browser shortcut, not ours
 
     if (e.key === 'Escape') {
-      // Always, enabled or not: this is the way out.
+      // Always, enabled or not: this is the way out. What "out" means on each
+      // screen is main.js's onEscape; this only makes sure it is the one
+      // thing the press does.
       e.preventDefault();
+      if (e.repeat) return;
       stopAll();
-      on.onPause();
+      on.onEscape();
       return;
     }
 
