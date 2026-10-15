@@ -722,7 +722,7 @@ const STRINGS = {
     'err.unreachable': (type) => `Could not reach the game (${type}).`,
     'err.hostSilent': 'The host did not answer.',
     'err.noTurn':
-      'The host never answered. Check the code — and that there is no TURN here, so a few networks simply cannot reach each other.',
+      'The host never answered. Check the code — a few networks simply cannot reach each other.',
     'err.reopening': 'Reopening the game — the code may not work just now.',
     'err.codeStolen': 'Something else took this code. Host again for a fresh one.',
     'err.mmTrouble': (type) => `Matchmaking trouble (${type}).`,

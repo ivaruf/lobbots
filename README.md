@@ -116,8 +116,11 @@ The honest limits, the same as every online game in the hub:
 - **The host must keep the page open.** The match runs on their device.
   Their screen is kept awake while a hangar is open, and the match keeps
   running if they switch tabs, but closing it ends the match for everyone.
-- **About one pair of networks in ten cannot connect at all.** There is no
-  relay server (TURN) behind this, because that costs money by the gigabyte.
+- **About one pair of networks in ten cannot connect directly.** Those go
+  through Cloudflare's relay (TURN), with credentials handed out an hour at a
+  time by a small Worker that holds the key. Cloudflare sees those players'
+  IP addresses and how much they send, never the game. If the Worker cannot
+  be reached, those few pairs fail to connect, as they did before.
 - **A public matchmaker introduces the devices** (PeerJS's free broker). It
   sees the three words and connection details, never the game. If it is
   down, no new hangars open; matches already under way are unaffected.

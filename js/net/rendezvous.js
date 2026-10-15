@@ -34,7 +34,8 @@
  *   - a third party with no promises. Down means no new games; games already
  *     connected are untouched, because it carries no game traffic.
  *   - it sees room codes and connection metadata. It never sees game data.
- *   - no TURN, so a minority of network situations fail to connect at all.
+ *   - it offers no TURN. That comes from Cloudflare instead, with its own
+ *     trade written down at the top of webrtc.js.
  * Against that, it needs nothing running and nothing paid for.
  */
 
@@ -44,6 +45,7 @@ import {
   relaySignalling,
   hostOverWebRTC,
   joinOverWebRTC,
+  iceConfig,
 } from "./webrtc.js";
 
 /*
@@ -221,7 +223,12 @@ export async function hostRendezvous(code, onPeer) {
   }
   try {
     const Peer = await loadBroker();
-    const peer = new Peer(brokerId(code));
+    // The pipe is a WebRTC connection of its own, so it gets our TURN too;
+    // left alone, PeerJS falls back on its own public relay, and a pair that
+    // needs one would depend on that before ours was ever asked. PeerJS reads
+    // this once, so a lobby left open past the credentials' hour relays new
+    // pipes no longer — direct ones are unaffected, and hosting again fixes it.
+    const peer = new Peer(brokerId(code), { config: await iceConfig() });
     await waitFor(
       peer,
       20000,
@@ -324,7 +331,8 @@ export async function joinRendezvous(code) {
       detail: error.message,
     };
   }
-  const peer = new Peer();
+  // Our TURN for the pipe as well as the game; see hostRendezvous.
+  const peer = new Peer({ config: await iceConfig() });
   await waitFor(
     peer,
     20000,

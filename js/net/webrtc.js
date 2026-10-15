@@ -26,13 +26,74 @@
  * of the file that differs in shape for a saving of nothing.
  */
 
-const ICE = {
-  // One public STUN server, and no TURN. STUN only tells a peer its own
-  // public address; no game traffic passes through it. TURN would relay the
-  // traffic itself, which costs bandwidth by the gigabyte — see docs/P2P.md
-  // for what that means for the roughly one connection in ten that needs it.
-  iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }],
-};
+/*
+ * ICE: how the two ends find a path to each other.
+ *
+ * STUN only tells a peer its own public address, and that is enough for a
+ * direct connection most of the time. Roughly one pair in ten sits behind
+ * networks that will not let a direct path through, and for those TURN
+ * relays the traffic itself. WebRTC tries every path it is given and keeps
+ * the best, so offering TURN costs a direct pair nothing: the relay is only
+ * used where nothing else connects.
+ *
+ * TURN credentials cannot sit in this file — anyone could read them and
+ * relay their own traffic on our account — so a tiny Cloudflare Worker
+ * (gopher-cloud-turn) holds the key and hands out credentials that expire
+ * after an hour. It is fetched only when a player hosts or joins, so a solo
+ * game never contacts it, and it is cached for most of that hour.
+ *
+ * The trade, stated plainly (hub CLAUDE.md §1): Cloudflare sees the IP
+ * addresses of players whose connection is relayed, and when and how much
+ * they send. It never sees game data — WebRTC encrypts end to end, and the
+ * relay only forwards ciphertext. The first 1,000 GB a month are free, and
+ * this game uses megabytes.
+ *
+ * If the Worker cannot be reached — blocked, down, slow, or a local server
+ * whose origin it does not allow — we use STUN alone, which is exactly the
+ * game as it was before TURN: the same nine pairs in ten still connect.
+ *
+ * `?relay` in the URL forces every connection through TURN, for testing
+ * that the relay itself works (chrome://webrtc-internals shows "relay").
+ *
+ * Exported because rendezvous.js hands the same config to PeerJS: on the
+ * broker path the signalling pipe is itself a WebRTC connection, and a pair
+ * that cannot reach each other directly cannot open that pipe either.
+ */
+const STUN = { urls: ["stun:stun.l.google.com:19302"] };
+const TURN_URL = "https://gopher-cloud-turn.ivar-fredriksen.workers.dev";
+const TURN_FETCH_MS = 3000;
+// Credentials live an hour; refetch well before that, so a long lobby never
+// hands a guest a set that expires mid-handshake.
+const TURN_REUSE_MS = 45 * 60 * 1000;
+const forceRelay = (() => {
+  try {
+    return new URLSearchParams(location.search).has("relay");
+  } catch {
+    return false;
+  }
+})();
+
+let turnCache = null; // { at, servers }
+
+export async function iceConfig() {
+  if (!turnCache || Date.now() - turnCache.at > TURN_REUSE_MS) {
+    try {
+      const response = await fetch(TURN_URL, {
+        signal: AbortSignal.timeout(TURN_FETCH_MS),
+        cache: "no-store",
+      });
+      const body = response.ok ? await response.json() : null;
+      const servers = Array.isArray(body?.iceServers) ? body.iceServers : null;
+      if (servers?.length) turnCache = { at: Date.now(), servers };
+    } catch {
+      /* STUN alone below; a failed fetch is tried again on the next join. */
+    }
+  }
+  const config = { iceServers: turnCache?.servers ?? [STUN] };
+  if (forceRelay) config.iceTransportPolicy = "relay";
+  return config;
+}
+
 const UNRELIABLE = { ordered: false, maxRetransmits: 0 };
 
 /* Same browser, different tabs. No third party at all, and it exercises the
@@ -171,6 +232,13 @@ const opened = (lane) =>
 /* Host: answer anyone who offers, and hand each finished channel up. */
 export function hostOverWebRTC(signalling, onPeer) {
   const pending = new Map();
+  // Fetched as soon as hosting starts, so it has long since arrived by the
+  // time anyone has tapped in the code.
+  const ice = iceConfig();
+  // A guest's candidates can arrive while we are still waiting on the ICE
+  // config or on setRemoteDescription, and addIceCandidate throws before a
+  // remote description exists. Hold them per guest and add them after.
+  const early = new Map();
   const handler = async (message) => {
     if (message?.from === undefined) return;
     const id = message.from;
@@ -179,7 +247,9 @@ export function hostOverWebRTC(signalling, onPeer) {
         // A second offer from an id we already answered is a guest that
         // reloaded. Drop the stale connection rather than keep two.
         pending.get(id)?.close();
-        const connection = new RTCPeerConnection(ICE);
+        pending.delete(id);
+        if (!early.has(id)) early.set(id, []);
+        const connection = new RTCPeerConnection(await ice);
         pending.set(id, connection);
         const lanes = {};
         connection.ondatachannel = (e) => {
@@ -198,6 +268,9 @@ export function hostOverWebRTC(signalling, onPeer) {
             });
         };
         await connection.setRemoteDescription(message.description);
+        for (const candidate of early.get(id) ?? [])
+          await connection.addIceCandidate(candidate).catch(() => {});
+        early.delete(id);
         const answer = await connection.createAnswer();
         await connection.setLocalDescription(answer);
         signalling.post({
@@ -207,9 +280,12 @@ export function hostOverWebRTC(signalling, onPeer) {
           description: plainDescription(answer),
         });
       } else if (message.type === "ICE" && message.to === "host") {
+        if (!message.candidate) return;
         const connection = pending.get(id);
-        if (connection && message.candidate)
+        if (connection?.remoteDescription)
           await connection.addIceCandidate(message.candidate).catch(() => {});
+        else if (early.has(id)) early.get(id).push(message.candidate);
+        else early.set(id, [message.candidate]);
       }
     } catch {
       // A malformed offer is one guest's problem, not the lobby's; the rest
@@ -222,6 +298,7 @@ export function hostOverWebRTC(signalling, onPeer) {
       signalling.off(handler);
       for (const connection of pending.values()) connection.close();
       pending.clear();
+      early.clear();
       signalling.close();
     },
   };
@@ -230,7 +307,7 @@ export function hostOverWebRTC(signalling, onPeer) {
 /* Guest: offer, wait for the answer, resolve once both lanes are open. */
 export async function joinOverWebRTC(signalling, { timeout = 15000 } = {}) {
   const id = Math.random().toString(36).slice(2, 10);
-  const connection = new RTCPeerConnection(ICE);
+  const connection = new RTCPeerConnection(await iceConfig());
   const reliable = connection.createDataChannel("game");
   const fast = connection.createDataChannel("fast", UNRELIABLE);
   connection.onicecandidate = (e) => {
@@ -269,7 +346,7 @@ export async function joinOverWebRTC(signalling, { timeout = 15000 } = {}) {
           () =>
             reject(
               // `key` is what js/i18n.js shows; the message is for the console.
-              Object.assign(new Error("The host never answered (no TURN)."), {
+              Object.assign(new Error("The host never answered."), {
                 key: "noTurn",
               }),
             ),
