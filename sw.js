@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.6.0'; // TURN through Cloudflare: the one pair in ten that cannot go direct now connects through a relay
+const VERSION = 'v0.6.1'; // open on a sting: the walker fires, the shell lands on the title and blasts the curtain open
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is
@@ -42,6 +42,7 @@ const ASSETS = [
   './js/update.js',
   './js/screen.js',
   './js/touch-guard.js',
+  './js/intro.js',
   './js/input.js',
   './js/ui.js',
   './js/i18n.js',

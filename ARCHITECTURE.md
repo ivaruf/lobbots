@@ -52,6 +52,8 @@ tankwars/
                             render / ui / audio, turns input into actions     [glue]
     update.js               SW registration + UPDATE READY (self-contained)   [assets]
     screen.js               fullscreen pill (self-contained; not fullscreen.js) [assets]
+    intro.js                opening sting: shell lands on the title, crater opens
+                            (classic, self-contained, async atop <body>)      [ui]
     input.js                keyboard + pointer -> intents                     [ui]
     ui.js                   setup screen, HUD, shop, scoreboard, banners      [ui]
     i18n.js                 every word, bokmål (default) + English; t(),

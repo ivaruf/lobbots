@@ -69,6 +69,16 @@
   </head>
   <body>
     <!--
+      The opening sting: the walker fires, the shell lands on the title and
+      blasts the curtain open. A curtain over the page, never a gate in front
+      of it, and skipped by any tap or key; see the file. ASYNC AND FIRST IN
+      THE BODY, not deferred in the head: async runs it as soon as it is
+      fetched, with <body> already there to hang the canvas on, and still
+      before any of the game's own key listeners exist - which is what lets
+      the skipping key be swallowed before it can be Escape.
+    -->
+    <script src="js/intro.js" async></script>
+    <!--
       One canvas, the whole battlefield, letterboxed by js/render/render.js;
       every screen below floats over it as DOM. The panels are deliberately
       translucent so the hillside shows through whatever you are reading.
