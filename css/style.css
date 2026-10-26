@@ -2216,8 +2216,17 @@ button:active:not(:disabled) {
   #setup #roster {
     overflow: hidden;
   }
+  /* The options are the left column's one stretchy row (minmax(0, 1fr)), and
+   * on a short phone they are taller than it. Without their own scroll they
+   * spilled out of the cell over DEPLOY and nothing could reach them — the
+   * panel's height is fixed, so its overflow: auto had nothing to scroll.
+   * They scroll inside themselves, like the roster beside them, and `safe`
+   * keeps an overflowing column from being centred up past its own top. */
   #setup .setup-opts {
-    justify-content: center;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    justify-content: safe center;
     gap: 5px;
   }
   #setup #logo {
