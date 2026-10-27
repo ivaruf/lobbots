@@ -556,6 +556,8 @@ export function createUI(callbacks = {}) {
   const roundsInput = $('rounds-input');
   const seatsBox = $('seats');
   const seatCount = $('seat-count');
+  const tabCrewCount = $('tab-crew-count');
+  const tabRulesSub = $('tab-rules-sub');
   const seatLess = $('seat-less');
   const seatMore = $('seat-more');
   const deployBtn = $('deploy');
@@ -865,7 +867,9 @@ export function createUI(callbacks = {}) {
 
   function renderPreset() {
     markSeg(presetSeg, setup.preset);
-    setText(presetBlurb, t(`presetd.${PRESETS[setup.preset] ? setup.preset : 'default'}`));
+    const shown = PRESETS[setup.preset] ? setup.preset : 'default';
+    setText(presetBlurb, t(`presetd.${shown}`));
+    setText(tabRulesSub, t(`preset.${shown}`));
   }
 
   function renderMoney() {
@@ -876,6 +880,37 @@ export function createUI(callbacks = {}) {
     markSeg(roundsSeg, setup.custom ? 'custom' : setup.rounds);
     roundsCustom.hidden = !setup.custom;
     if (roundsInput.value !== String(setup.rounds)) roundsInput.value = String(setup.rounds);
+  }
+
+  // ---- the phone's two tabs -------------------------------------------------
+
+  /*
+   * Crew or rules, one at a time, on a phone only — CSS decides where the tab
+   * row shows and hides the panel that is not chosen; wider screens ignore
+   * #setup[data-tab] and show both. Arrow keys walk the row, as a tablist is
+   * expected to; the chosen tab is the row's one Tab stop.
+   */
+  const setupTabs = [...screens.setup.querySelectorAll('.setup-tabs [role="tab"]')];
+  function selectTab(name, focus = false) {
+    screens.setup.dataset.tab = name;
+    for (const b of setupTabs) {
+      const on = b.dataset.tab === name;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+      if (on && focus) b.focus();
+    }
+  }
+  for (const b of setupTabs) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectTab(b.dataset.tab);
+    });
+    b.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const step = e.key === 'ArrowRight' ? 1 : setupTabs.length - 1;
+      selectTab(setupTabs[(setupTabs.indexOf(b) + step) % setupTabs.length].dataset.tab, true);
+    });
   }
 
   // ---- the roster ---------------------------------------------------------
@@ -890,6 +925,7 @@ export function createUI(callbacks = {}) {
     seatsBox.textContent = '';
     setup.seats.forEach((seat, i) => seatsBox.appendChild(seatCard(seat, i)));
     setText(seatCount, setup.seats.length);
+    setText(tabCrewCount, setup.seats.length);
     seatLess.disabled = setup.seats.length <= MIN_PLAYERS || lastLocalSeat() < 0;
     seatMore.disabled = setup.seats.length >= MAX_PLAYERS;
   }
@@ -1947,6 +1983,8 @@ export function createUI(callbacks = {}) {
     setHangar(info) {
       hangarBox.hidden = !info;
       onlineBtn.hidden = !!info;
+      // The code a friend needs lives at the head of the crew: show it.
+      if (info) selectTab('crew');
       if (!info) {
         for (const seat of setup.seats.slice()) if (seat.remote) removeRemoteSeat(seat.remote);
         return;

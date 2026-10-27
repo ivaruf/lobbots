@@ -93,7 +93,7 @@
            boots. js/ui.js fills the empty containers here (preset pills,
            rounds pills, the seat cards) from js/config.js so the labels and
            the code cannot drift apart. -->
-      <section id="setup" class="screen panel" aria-labelledby="logo">
+      <section id="setup" class="screen panel" data-tab="crew" aria-labelledby="logo">
         <div class="plate-strip" aria-hidden="true"></div>
 
         <header class="screen-head">
@@ -107,7 +107,26 @@
           </div>
         </header>
 
-        <div class="setup-opts">
+        <!-- The phone's two tabs (2026-10-27). A phone cannot show the rules
+             and the crew at once without squeezing every pill into half a
+             screen, so there it shows one at a time and the doors stay put
+             underneath. Wider screens have room for both and hide this row;
+             the two panels then simply stand side by side as before.
+             js/ui.js switches #setup[data-tab] and keeps the count and the
+             preset written on the tabs, so a closed tab still says what is
+             behind it. -->
+        <div class="setup-tabs" role="tablist" data-i18n-aria="setupTabs" aria-label="Oppsett">
+          <button type="button" role="tab" id="tab-crew" data-tab="crew" aria-controls="roster" aria-selected="true">
+            <span data-i18n="players">Spillere</span>
+            <b id="tab-crew-count" class="tab-badge">4</b>
+          </button>
+          <button type="button" role="tab" id="tab-rules" data-tab="rules" aria-controls="setup-opts" aria-selected="false" tabindex="-1">
+            <span data-i18n="rules">Regler</span>
+            <small id="tab-rules-sub" class="tab-sub"></small>
+          </button>
+        </div>
+
+        <div class="setup-opts" id="setup-opts" role="tabpanel" aria-labelledby="tab-rules">
           <div class="row">
             <span class="label" id="lbl-preset" data-i18n="rules">Regler</span>
             <div
@@ -159,7 +178,7 @@
         <!-- The roster. #seats scrolls inside its own box rather than growing
              the panel, so DEPLOY and the way out never leave the screen —
              ten seats is a lot of card on a phone. -->
-        <div id="roster">
+        <div id="roster" role="tabpanel" aria-labelledby="tab-crew">
           <div class="roster-head">
             <span class="label" id="lbl-seats" data-i18n="players">Spillere</span>
             <span id="seat-count" class="count">4</span>

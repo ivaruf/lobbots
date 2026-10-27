@@ -2508,3 +2508,238 @@ button:active:not(:disabled) {
 #ui.menu-over > .screen:not(#pause) {
   visibility: hidden;
 }
+
+/* ===================== the setup screen on a phone: two tabs =====================
+ * (2026-10-27, after the owner: "the menu is still crowded and the text on
+ * buttons is still squashed".) Rules and crew side by side gave each half a
+ * phone, so every pill broke its word in two — "Van-lig", a 500 stacked one
+ * digit per line, "Kaosgop-heren". On a phone the setup now shows ONE of
+ * them, full width, behind a tab row; the doors — PLAY, Play online and the
+ * way out — stay where they are whichever tab is up. The panel has a fixed
+ * height so switching tabs never makes it jump.
+ *
+ *   upright   logo · tabs · the chosen panel (scrolls inside itself) · doors
+ *   sideways  logo and the doors down a narrow left column; the tabs head
+ *             the right column and the chosen panel fills the rest of it.
+ *
+ * Wider screens never see the tab row: they have room for both panels, and
+ * #setup[data-tab] means nothing to them. This block comes last so it wins
+ * over the older per-orientation setup rules above without !important. */
+.setup-tabs {
+  display: none;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #607a8d33;
+  border-radius: 12px;
+  background: #0a131c99;
+  box-shadow: inset 0 2px 6px #0004;
+}
+.setup-tabs button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--head);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.setup-tabs button:hover {
+  color: var(--text);
+}
+/* The chosen tab is a lifted plate, the same graphite as a chosen bot. */
+.setup-tabs button[aria-selected="true"] {
+  color: #eaf3f7;
+  background: linear-gradient(#496071, #304454);
+  border-color: #9cb3c080;
+  box-shadow: inset 0 1px #ffffff20, 0 2px #080f16;
+}
+/* What is behind a closed tab: the crew's head count, the preset's name. */
+.tab-badge {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #a7d9e824;
+  color: var(--accent);
+  font-size: 13px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.tab-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--accent);
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+@media (max-width: 700px), (orientation: landscape) and (max-height: 500px) {
+  .setup-tabs {
+    display: flex;
+  }
+  #setup[data-tab="crew"] .setup-opts,
+  #setup[data-tab="rules"] #roster {
+    display: none;
+  }
+  #setup .hangar-kicker {
+    display: none;
+  }
+
+  /* The rules, given the whole width: each caption above its row rather
+     than beside it, so a row of six purses gets every pixel of the panel. */
+  #setup .setup-opts {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 2px 2px 4px;
+  }
+  #setup .setup-opts .row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+  }
+  #setup .setup-opts .label {
+    flex: none;
+  }
+  #setup .setup-opts .seg {
+    flex-wrap: nowrap;
+  }
+  #setup .setup-opts .seg button {
+    white-space: nowrap;
+    padding-inline: 4px;
+  }
+  #setup .setup-opts .blurb {
+    margin-bottom: 4px;
+  }
+  #setup .setup-opts .field.num {
+    max-width: 120px;
+  }
+
+  /* The crew: the roster column is the panel, and #seats its scrolling body. */
+  #setup #roster {
+    min-height: 0;
+    overflow: hidden;
+  }
+  #setup #seats {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+  #setup .roster-head {
+    padding-right: 0;
+  }
+  /* Who drives and which bot: room enough now that no word has to break. */
+  #setup .seg-kind {
+    flex: 0 0 136px;
+  }
+  #setup .seg-kind button {
+    white-space: nowrap;
+  }
+}
+
+/* Upright: one column, and the chosen panel takes whatever the doors leave. */
+@media (max-width: 700px) and (min-height: 501px), (max-width: 700px) and (orientation: portrait) {
+  #ui > #setup {
+    height: calc(100% - var(--corner-h) - 16px);
+    padding: 14px 14px 12px;
+    gap: 9px;
+  }
+  #setup #logo {
+    font-size: 40px;
+  }
+  #setup .setup-opts,
+  #setup #roster {
+    flex: 1 1 auto;
+  }
+  #setup .exit-btn {
+    margin-top: 2px;
+  }
+}
+
+/* Sideways: the doors' column on the left, the tabbed panel on the right. */
+@media (orientation: landscape) and (max-height: 500px) {
+  #setup {
+    grid-template-columns: minmax(190px, 0.7fr) minmax(0, 1.6fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      "head   tabs"
+      "head   panel"
+      ".      panel"
+      "go     panel"
+      "online panel"
+      "foot   panel";
+    gap: 8px 16px;
+  }
+  #setup .screen-head {
+    grid-area: head;
+    align-self: start;
+  }
+  #setup .setup-tabs {
+    grid-area: tabs;
+    /* The corner's plates sit over the top of this column: the tab row steps
+       in from the right by as much of them as overhangs the panel. */
+    margin-right: max(0px, calc(var(--corner-w) + 6px - (100vw - min(780px, 100vw - 16px)) / 2 - 14px));
+  }
+  #setup .setup-tabs button {
+    min-height: 38px;
+    font-size: 14px;
+  }
+  #setup .setup-opts,
+  #setup #roster {
+    grid-area: panel;
+  }
+  #setup #deploy {
+    align-self: end;
+  }
+  #setup #online-row {
+    max-width: none;
+  }
+  #setup #online-row .ghost,
+  #setup .exit-btn {
+    min-height: 38px;
+  }
+  #setup .exit-btn {
+    margin-top: 0;
+  }
+  /* Two purses rows of six still want the width: tighten the pill text. */
+  #setup .setup-opts .seg button {
+    min-height: 36px;
+    font-size: 12px;
+  }
+}
+/* The tab already says "Players 4"; the roster's own heading would say it twice. */
+@media (max-width: 700px), (orientation: landscape) and (max-height: 500px) {
+  #setup .roster-head > .label,
+  #setup #seat-count {
+    display: none;
+  }
+}
+
+/* The seven bot names, at every size: wide enough that "Kaosgopheren" and
+ * "Improvisatoren" never break — a tablet upright was still splitting them
+ * at seven to a row. Fewer to a row is the honest trade. */
+#setup .seg-pers {
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+}
+#setup .seg-pers button {
+  min-height: 38px;
+  padding: 4px 6px;
+  font-size: 12px;
+  hyphens: none;
+  overflow-wrap: normal;
+}
