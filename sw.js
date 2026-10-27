@@ -25,7 +25,7 @@
 // (/tankwars/ today, /lobbots/ when the folder is renamed) and is also framed
 // by the arcade from a sibling directory.
 
-const VERSION = 'v0.7.0'; // the setup screen on a phone: Players and Rules as two tabs, nothing squashed, the doors always in view
+const VERSION = 'v0.7.1'; // the manifest says its id and carries a 192 maskable icon, as neonfox's does
 const CACHE = `lobbots-${VERSION}`;
 
 // Every shipped file. install blocks until all of it is cached, so this list is
@@ -81,6 +81,7 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/icon-180.png',
   './icons/icon-maskable-512.png',
+  './icons/icon-maskable-192.png',
   // The eleven cues, ~150 KB for the set. Small enough to precache with
   // everything else, which is what stops the first thump of a session being
   // late — a whistle that arrives after the shell has already landed is worse

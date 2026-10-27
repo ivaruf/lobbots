@@ -3,8 +3,8 @@
 
     python3 tools/make-icons.py
 
-Writes icons/icon-192.png, icon-512.png, icon-180.png and
-icon-maskable-512.png. Requires Pillow (stdlib otherwise); no network, no
+Writes icons/icon-192.png, icon-512.png, icon-180.png, icon-maskable-192.png
+and icon-maskable-512.png. Requires Pillow (stdlib otherwise); no network, no
 fonts, no external assets — the whole motif is polygons, lines and circles.
 The script is the source of truth, not the PNGs (hub CLAUDE.md §4): change the
 motif here and re-run, never touch the images.
@@ -250,8 +250,13 @@ def main():
     # mask can take ~11% off every edge and still not clip the barrel or the
     # shell. The sky fills the frame regardless, and the hill runs off the
     # bottom by construction, so the result is opaque to its corners.
-    render(512, sq=0.78).save(os.path.join(OUT, "icon-maskable-512.png"))
-    print("wrote icon-maskable-512.png")
+    # Both sizes, as neonfox ships (the one game Android had installed when
+    # Lobbots would not, 2026-10-27): the launcher picks a maskable icon near
+    # its own size rather than shrinking the 512.
+    for size in (512, 192):
+        name = f"icon-maskable-{size}.png"
+        render(size, sq=0.78).save(os.path.join(OUT, name))
+        print("wrote", name)
 
 
 if __name__ == "__main__":
